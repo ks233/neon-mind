@@ -9,6 +9,8 @@ export interface LogicNode {
   parentId?: string; // 导图子节点有
   childrenIds: string[]; // 树状结构引用
   data?: any; // 扩展数据
+  width?: number;
+  height?: number;
 }
 
 export interface LogicEdge {
