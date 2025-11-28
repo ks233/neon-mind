@@ -1,0 +1,40 @@
+/* 1. 根变量 (定义材质球属性) */
+:root {
+  font-family: Inter, Avenir, Helvetica, Arial, sans-serif;
+  
+  /* 浅色模式变量 */
+  --bg-color: #ffffff;
+  --node-bg: #ffffff;
+  --text-color: #2c3e50;
+  --border-color: #e5e5e5;
+  --grid-color: #e5e5e5;
+  --line-color: #b1b1b7;
+  --handle-color: #555;
+  
+  /* 禁用 iOS/Mac 橡皮筋滚动 */
+  overscroll-behavior: none;
+}
+
+/* 2. 深色模式覆盖 */
+html.dark {
+  --bg-color: #1b1b1b;
+  --node-bg: #2c2c2c;
+  --text-color: #ececec;
+  --border-color: #3e3e3e;
+  --grid-color: #3a3a3a;
+  --line-color: #666;
+  --handle-color: #aaa;
+}
+
+/* 3. 全局重置 (Canvas Scaler: Expand) */
+html, body, #app {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100%;
+  /* overflow: hidden;  */
+  
+  background-color: var(--bg-color);
+  color: var(--text-color);
+  transition: background-color 0.3s, color 0.3s;
+}
