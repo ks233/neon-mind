@@ -1,7 +1,7 @@
 // src/composables/useGlobalShortcuts.ts 最终推荐版
 import { onKeyStroke } from '@vueuse/core'
-import { useCanvasStore } from '../stores/canvasStore'
-import { isInputActive } from '../utils/keyboard'
+import { useCanvasStore } from '@/stores/canvasStore'
+import { isInputActive } from '@/utils/keyboard'
 
 export function useGlobalShortcuts() {
   const store = useCanvasStore()

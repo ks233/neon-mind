@@ -2,6 +2,7 @@ import type { LogicNode } from '@/types/model';
 import type { Node, Edge } from '@vue-flow/core';
 import { createVisualNode } from '@/utils/transformers';
 import { tree, hierarchy, type HierarchyNode } from 'd3-hierarchy';
+import { snapToGrid } from '@/utils/grid'
 
 // === 类型定义 (让 TS 知道我们在 D3 节点上挂载了什么数据) ===
 interface LayoutData extends LogicNode {
@@ -161,9 +162,10 @@ function generateVueFlowElements(rootD3: ExtendedNode, logicRoot: LogicNode) {
         // 当前节点的世界中心 = 根节点世界中心 + relativeCenterY
         // 当前节点的世界Top  = 当前节点世界中心 - (nodeHeight / 2)
         const finalY = (startY + rootHeight / 2) + relativeCenterY - (nodeHeight / 2);
-
+        const snappedX = snapToGrid(finalX);
+        const snappedY = snapToGrid(finalY);
         // 3. 生成 Vue Node
-        resultNodes.push(createVisualNode(d.data, { x: finalX, y: finalY }));
+        resultNodes.push(createVisualNode(d.data, { x: snappedX, y: snappedY }));
 
         // 4. 生成 Vue Edge
         if (d.parent) {
