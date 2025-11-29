@@ -10,17 +10,21 @@ import '@vue-flow/core/dist/style.css'
 import '@vue-flow/core/dist/theme-default.css'
 import '@vue-flow/controls/dist/style.css'
 
-// 1. 引入刚才写的组件
+// ==========================
+// =========自定义节点=========
+// ==========================
+
 import OriginNode from './components/OriginNode.vue'
 import MarkdownNode from './components/MarkdownNode.vue'
 import MindMapNode from './components/MindMapNode.vue'
 
-// 2. 定义节点类型映射 (类似 Unity 的 Prefab 注册)
 const nodeTypes: NodeTypesObject = {
     origin: markRaw(OriginNode as any),
     markdown: markRaw(MarkdownNode as any),
     'mindmap': markRaw(MindMapNode),
 }
+
+
 
 import { useCanvasStore } from './stores/canvasStore'
 // 1. 获取 Store
@@ -30,15 +34,11 @@ const store = useCanvasStore()
 // 相当于 Camera.main
 const { screenToFlowCoordinate, addEdges, updateEdge } = useVueFlow()
 
-const edges = ref([
-    { id: 'e1-2', source: '1', target: '2', animated: true },
-    { id: 'e1-3', source: '1', target: '3' },
-])
+// =========================
+// =========创建节点=========
+// =========================
 
 function onDblClick(event: MouseEvent) {
-    // [!code focus:10] 1. "射线检测"：检查点击的目标是不是节点或连线
-    // event.target 是鼠标直接点到的那个 HTML 元素
-    // .closest() 相当于 Unity 的 GetComponentInParent()，向上查找父级
     const target = event.target as Element
     const isNode = target.closest('.vue-flow__node')
     const isEdge = target.closest('.vue-flow__edge')
@@ -48,7 +48,7 @@ function onDblClick(event: MouseEvent) {
         return
     }
 
-    // 2. 只有点在空地上，才执行生成逻辑
+    // 只有点在空地上，才执行生成逻辑
     const { x, y } = screenToFlowCoordinate({
         x: event.clientX,
         y: event.clientY,
@@ -61,11 +61,35 @@ function onDblClick(event: MouseEvent) {
     event.preventDefault()
 }
 
+// =========================
+// =========监听变化=========
+// =========================
+
 function onConnect(params: Connection) {
     // params 包含了 source(起点ID), target(终点ID), sourceHandle(起点端点ID) 等信息
     // addEdge 是官方提供的工具，它会自动处理去重，并生成 edge 对象
     addEdges(params)
 }
+
+// 当用户按 Delete 键时，Vue Flow 会先更新视图，然后触发这个回调
+function onNodesChange(changes: NodeChange[]) {
+    changes.forEach((change) => {
+        if (change.type === 'remove') {
+            console.log('检测到节点删除:', change.id)
+            store.removeNodeFromModel(change.id)
+        }
+    })
+}
+
+function onEdgesChange(changes: EdgeChange[]) {
+    // 这里的逻辑比较简单：直接把当前的 edges 数组全量同步给 model 即可
+    // 因为连线数据量通常不大
+    nextTick(() => store.updateEdgesModel(store.vueEdges))
+}
+
+// =============================
+// =========Edge Update=========
+// =============================
 
 const isUpdateSuccessful = ref(false)
 
@@ -86,7 +110,7 @@ function onEdgeUpdate({ edge, connection }: { edge: GraphEdge, connection: Conne
 
 // 4. 拖拽结束时，检查标志位
 function onEdgeUpdateEnd(params: EdgeMouseEvent) {
-    // [!code focus:4] 只有在没有触发过 onEdgeUpdate 的情况下，才删除
+    // 只有在没有触发过 onEdgeUpdate 的情况下，才删除
     const { edge } = params
     if (!isUpdateSuccessful.value) {
         store.vueEdges = store.vueEdges.filter((e) => e.id !== edge.id)
@@ -95,6 +119,10 @@ function onEdgeUpdateEnd(params: EdgeMouseEvent) {
     // 重置状态（可选，为了保险）
     isUpdateSuccessful.value = false
 }
+
+// ===========================
+// =========Dark Mode=========
+// ===========================
 
 import { useDark, useToggle } from '@vueuse/core' // [!code focus]
 
@@ -107,38 +135,10 @@ const toggleDark = useToggle(isDark)
 const gridColor = computed(() => isDark.value ? '#3a3a3a' : '#e5e5e5')
 const edgeColor = computed(() => isDark.value ? '#666' : '#b1b1b7')
 
+// ===============================
+// =========拖拽改变导图层级=========
+// ===============================
 
-
-// === A. 监听拖拽结束 (Drag Stop) ===
-// 相比 onNodeDrag，Stop 性能更好，只在松手时更新一次 Model
-// function onNodeDragStop(e: NodeDragEvent) {
-//   // e.nodes 包含了所有被拖拽的节点 (支持多选拖拽)
-//   e.nodes.forEach((node) => {
-//     // 同步回 Store
-//     store.updateNodePosition(node.id, node.position)
-//   })
-// }
-
-// === B. 监听删除事件 (Nodes Change) ===
-// 当用户按 Delete 键时，Vue Flow 会先更新视图，然后触发这个回调
-function onNodesChange(changes: NodeChange[]) {
-    changes.forEach((change) => {
-        if (change.type === 'remove') {
-            console.log('检测到节点删除:', change.id)
-            store.removeNodeFromModel(change.id)
-        }
-    })
-}
-
-// === C. 监听连线变化 (Edges Change) ===
-function onEdgesChange(changes: EdgeChange[]) {
-    // 这里的逻辑比较简单：直接把当前的 edges 数组全量同步给 model 即可
-    // 因为连线数据量通常不大
-    nextTick(() => store.updateEdgesModel(store.vueEdges))
-}
-
-
-// 拖拽改变导图节点层级
 const { getIntersectingNodes } = useVueFlow()
 
 // === 拖拽状态管理 ===
