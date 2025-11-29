@@ -17,19 +17,15 @@ export const useCanvasStore = defineStore('canvas', () => {
     });
 
     // UI 交互状态 (不需要持久化)
-    const highlightTargetId = ref<string | null>(null);
-    const highlightIntent = ref<'child' | 'above' | 'below' | null>(null);
+    const dragTargetId = ref<string | null>(null);
+    const dragIntent = ref<'child' | 'above' | 'below' | null>(null);
 
     // === 2. View (Render State / GameObjects) ===
     const vueNodes = ref<Node[]>([]);
     const vueEdges = ref<Edge[]>([]);
 
-    // 获取引擎实例
-    const { fitView } = useVueFlow();
 
-    // ==========================================================
-    // Core Pipeline: Model -> View (Deserialization & Layout)
-    // ==========================================================
+
 
     async function syncModelToView() {
         const nextNodes: Node[] = [];
@@ -388,7 +384,7 @@ export const useCanvasStore = defineStore('canvas', () => {
         moveMindMapNode,
         moveMindMapNodeTo,
         updateNodeSize,
-        highlightTargetId,
-        highlightIntent
+        dragTargetId,
+        dragIntent
     };
 });

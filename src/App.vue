@@ -10,33 +10,45 @@ import '@vue-flow/core/dist/style.css'
 import '@vue-flow/core/dist/theme-default.css'
 import '@vue-flow/controls/dist/style.css'
 
-// ==========================
-// =========自定义节点=========
-// ==========================
-
 import OriginNode from './components/OriginNode.vue'
 import MarkdownNode from './components/MarkdownNode.vue'
 import MindMapNode from './components/MindMapNode.vue'
 
+import { useCanvasStore } from './stores/canvasStore'
+
+import { useDark, useToggle } from '@vueuse/core'
+
+// #region 初始化
+
+// 自定义节点
 const nodeTypes: NodeTypesObject = {
     origin: markRaw(OriginNode as any),
     markdown: markRaw(MarkdownNode as any),
     'mindmap': markRaw(MindMapNode),
 }
 
-
-
-import { useCanvasStore } from './stores/canvasStore'
-// 1. 获取 Store
+// 数据单例
 const store = useCanvasStore()
 
-// 2. 获取 VueFlow 实例 (为了使用坐标转换函数)
-// 相当于 Camera.main
+// VueFlow 工具函数
 const { screenToFlowCoordinate, addEdges, updateEdge } = useVueFlow()
 
-// =========================
-// =========创建节点=========
-// =========================
+// #endregion
+
+// #region 深色模式
+
+// useDark 会自动检测系统偏好，并给 <html> 标签添加 'dark' class
+const isDark = useDark()
+const toggleDark = useToggle(isDark)
+
+// 计算属性：根据模式返回网格颜色 (Hex值)
+// 相当于在 Update() 里动态修改 Material 颜色
+const gridColor = computed(() => isDark.value ? '#3a3a3a' : '#e5e5e5')
+const edgeColor = computed(() => isDark.value ? '#666' : '#b1b1b7')
+
+// #endregion
+
+// #region 创建节点
 
 function onDblClick(event: MouseEvent) {
     const target = event.target as Element
@@ -61,9 +73,9 @@ function onDblClick(event: MouseEvent) {
     event.preventDefault()
 }
 
-// =========================
-// =========监听变化=========
-// =========================
+// #endregion
+
+// #region 监听变化
 
 function onConnect(params: Connection) {
     // params 包含了 source(起点ID), target(终点ID), sourceHandle(起点端点ID) 等信息
@@ -87,9 +99,9 @@ function onEdgesChange(changes: EdgeChange[]) {
     nextTick(() => store.updateEdgesModel(store.vueEdges))
 }
 
-// =============================
-// =========Edge Update=========
-// =============================
+// #endregion
+
+// #region 更新连线
 
 const isUpdateSuccessful = ref(false)
 
@@ -120,24 +132,9 @@ function onEdgeUpdateEnd(params: EdgeMouseEvent) {
     isUpdateSuccessful.value = false
 }
 
-// ===========================
-// =========Dark Mode=========
-// ===========================
+// #endregion
 
-import { useDark, useToggle } from '@vueuse/core' // [!code focus]
-
-// useDark 会自动检测系统偏好，并给 <html> 标签添加 'dark' class
-const isDark = useDark()
-const toggleDark = useToggle(isDark)
-
-// 计算属性：根据模式返回网格颜色 (Hex值)
-// 相当于在 Update() 里动态修改 Material 颜色
-const gridColor = computed(() => isDark.value ? '#3a3a3a' : '#e5e5e5')
-const edgeColor = computed(() => isDark.value ? '#666' : '#b1b1b7')
-
-// ===============================
-// =========拖拽改变导图层级=========
-// ===============================
+// #region 拖拽改变导图层级
 
 const { getIntersectingNodes } = useVueFlow()
 
@@ -156,11 +153,11 @@ function onNodeDrag(e: NodeDragEvent) {
 
     if (targetNode) {
         // 更新 Store 的 UI 状态
-        store.highlightTargetId = targetNode.id
-        store.highlightIntent = calculateIntent(draggedNode, targetNode)
+        store.dragTargetId = targetNode.id
+        store.dragIntent = calculateIntent(draggedNode, targetNode)
     } else {
-        store.highlightTargetId = null
-        store.highlightIntent = null
+        store.dragTargetId = null
+        store.dragIntent = null
     }
 }
 
@@ -168,11 +165,11 @@ function onNodeDrag(e: NodeDragEvent) {
 function onNodeDragStop(e: NodeDragEvent) {
     const draggedNode = e.node
 
-    if (store.highlightTargetId && store.highlightIntent && draggedNode.type === 'mindmap') {
-        console.log(`Moving ${draggedNode.id} -> ${store.highlightTargetId} (${store.highlightIntent})`)
+    if (store.dragTargetId && store.dragIntent && draggedNode.type === 'mindmap') {
+        console.log(`Moving ${draggedNode.id} -> ${store.dragTargetId} (${store.dragIntent})`)
 
         // 调用 Store 执行逻辑
-        store.moveMindMapNodeTo(draggedNode.id, store.highlightTargetId, store.highlightIntent)
+        store.moveMindMapNodeTo(draggedNode.id, store.dragTargetId, store.dragIntent)
     }
 
     e.nodes.forEach((node) => {
@@ -182,8 +179,8 @@ function onNodeDragStop(e: NodeDragEvent) {
     store.syncModelToView()
 
     // 清理状态
-    store.highlightTargetId = null
-    store.highlightIntent = null
+    store.dragTargetId = null
+    store.dragIntent = null
 }
 
 // 辅助：计算意图 (简单的 AABB 区域判断)
@@ -206,6 +203,8 @@ function calculateIntent(source: GraphNode, target: GraphNode): 'child' | 'above
         return 'child' // 命中中心
     }
 }
+
+// #endregion
 
 </script>
 

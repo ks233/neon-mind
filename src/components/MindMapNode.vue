@@ -21,8 +21,8 @@ const { id } = useNode()
 const store = useCanvasStore()
 
 // 计算当前是否被高亮
-const isTarget = computed(() => store.highlightTargetId === id)
-const intent = computed(() => isTarget.value ? store.highlightIntent : null)
+const isTarget = computed(() => store.dragTargetId === id)
+const intent = computed(() => isTarget.value ? store.dragIntent : null)
 
 // 从 props 转 ref 传给 hook
 const selectedRef = toRef(props, 'selected')
