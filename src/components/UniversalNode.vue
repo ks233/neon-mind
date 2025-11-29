@@ -3,7 +3,6 @@ import { ref, nextTick, toRef, computed } from 'vue'
 import { Handle, Position, useNode, type NodeProps } from '@vue-flow/core'
 import { useResizeObserver } from '@vueuse/core'
 import { NodeResizer } from '@vue-flow/node-resizer'
-import MarkdownIt from 'markdown-it'
 import { useCanvasStore } from '@/stores/canvasStore'
 import { useMindMapKeyboard } from '@/composables/useMindMapShortcuts'
 import '@vue-flow/node-resizer/dist/style.css'
@@ -20,13 +19,12 @@ const showDebug = ref(false)
 
 const { id } = useNode()
 const store = useCanvasStore()
-const md = new MarkdownIt({ html: true, linkify: true, breaks: true })
+
+import ContentMarkdown from './contents/ContentMarkdown.vue'
 
 // === 状态管理 ===
 const isEditing = ref(false)
-const textareaRef = ref<HTMLTextAreaElement | null>(null)
 const containerRef = ref<HTMLElement | null>(null) // 用于测量尺寸
-const localContent = ref(props.data.content)
 
 // 计算当前是否被高亮 (拖拽反馈)
 const isTarget = computed(() => store.dragTargetId === id)
@@ -38,6 +36,14 @@ const isFixedSize = computed(() => props.data.fixedSize)
 // 注入快捷键
 const selectedRef = toRef(props, 'selected')
 useMindMapKeyboard(id, selectedRef, isEditing)
+
+
+// === 核心逻辑：组件分发 ===
+const ResolvedContent = computed(() => {
+    // 未来在这里写 switch/case 逻辑
+    // if (props.data.imageUrl) return ContentImage
+    return ContentMarkdown
+})
 
 // === 自动尺寸上报 ===
 useResizeObserver(containerRef, (entries) => {
@@ -57,17 +63,15 @@ useResizeObserver(containerRef, (entries) => {
 function onDblClick(evt: MouseEvent) {
     evt.stopPropagation()
     isEditing.value = true
-    nextTick(() => {
-        textareaRef.value?.focus()
-    })
 }
 
 // 2. 失焦保存
 function onBlur() {
     isEditing.value = false
-    if (localContent.value !== props.data.content) {
-        store.updateNodeContent(id, localContent.value)
-    }
+}
+
+function onContentUpdate(val: string) {
+    store.updateNodeContent(id, val)
 }
 
 // 3. 手动调整大小结束
@@ -76,14 +80,12 @@ function onResizeEnd(evt: any) {
     // 这会将 fixedSize 置为 true，切换到固定模式
     store.updateNodeSize(id, { width, height })
 }
-
-const renderedMarkdown = computed(() => md.render(localContent.value))
 </script>
 
 <template>
     <div
         ref="containerRef"
-        class="mind-map-node"
+        class="universal-node"
         :class="{
             'is-root': data.isRoot,
             'selected': selectedRef,
@@ -91,7 +93,8 @@ const renderedMarkdown = computed(() => md.render(localContent.value))
             'fixed-size': isFixedSize,
             'drag-over-child': isTarget && intent === 'child',
             'drag-over-above': isTarget && intent === 'above',
-            'drag-over-below': isTarget && intent === 'below'
+            'drag-over-below': isTarget && intent === 'below',
+            'dragging' : dragging
         }"
         :style="isFixedSize ? { width: `${props.dimensions.width}px`, height: `${props.dimensions.height}px` } : {}"
         @dblclick="onDblClick"
@@ -112,37 +115,24 @@ const renderedMarkdown = computed(() => md.render(localContent.value))
         <Handle id="right" type="source" :position="Position.Right" class="io-handle" />
         <Handle id="bottom" type="source" :position="Position.Bottom" class="io-handle" />
 
-        <div v-show="showDebug" class="debug-info">
-            <span>({{ Math.round(position.x) }}</span>
-            <span>, {{ Math.round(position.y || 0) }}) </span>
-            <span style="color: #ff4d4f">{{ id.substring(0,8) }}</span>
-        </div>
-
-        <div class="content-wrapper">
-
-            <template v-if="isEditing">
-                <div
-                    v-if="!isFixedSize"
-                    class="ghost-text"
-                    aria-hidden="true">{{ localContent }}<br /></div>
-
-                <textarea
-                    ref="textareaRef"
-                    v-model="localContent"
-                    class="markdown-editor"
-                    :class="{ 'absolute-fill': !isFixedSize }"
-                    @blur="onBlur"
-                    @mousedown.stop
-                    @keydown.stop></textarea>
-            </template>
-
-            <div v-else class="markdown-body" v-html="renderedMarkdown"></div>
-        </div>
+        <component
+            :is="ContentMarkdown"
+            :content="data.content"
+            :fixed-size="isFixedSize"
+            :is-editing="isEditing"
+            @update:content="onContentUpdate"
+            @blur="isEditing = false" />
     </div>
+            <div v-show="showDebug" class="debug-info">
+            <span>({{ Math.round(position.x) }}, {{ Math.round(position.y || 0) }}) </span>
+            <span>({{ Math.round(dimensions.width) }}, {{ Math.round(dimensions.height || 0) }}) </span>
+            <span style="color: #ff4d4f">{{ id.substring(0, 8) }}</span><br>
+            <div>{{ JSON.stringify(props, null, 4) }}</div>
+        </div>
 </template>
 
 <style scoped>
-.mind-map-node {
+.universal-node {
     background: var(--node-bg);
     border: 2px solid var(--border-color);
     border-radius: 6px;
@@ -153,11 +143,12 @@ const renderedMarkdown = computed(() => md.render(localContent.value))
     flex-direction: column;
     overflow: hidden;
     box-sizing: border-box;
-    transition: box-shadow 0.2s, border-color 0.2s;
+    /* transition: box-shadow 0.2s, border-color 0.2s; */
+    transition: all 0.2s;
 }
 
 /* === 模式 A: 自动大小 === */
-.mind-map-node.auto-size {
+.universal-node.auto-size {
     width: fit-content;
     height: fit-content;
     min-width: 80px;
@@ -166,7 +157,7 @@ const renderedMarkdown = computed(() => md.render(localContent.value))
 }
 
 /* === 模式 B: 固定大小 === */
-.mind-map-node.fixed-size {
+.universal-node.fixed-size {
     /* 宽高由 Vue Flow style 控制，这里强制填满 */
     width: 100%;
     height: 100%;
@@ -182,81 +173,22 @@ const renderedMarkdown = computed(() => md.render(localContent.value))
 }
 
 /* 选中状态 */
-.mind-map-node.selected {
+.universal-node.selected {
     border-color: #1890ff;
     box-shadow: 0 0 0 2px rgba(24, 144, 255, 0.2);
 }
 
 /* 根节点样式 */
-.mind-map-node.is-root {
+.universal-node.is-root {
     background: #e6f7ff;
     border-color: #91d5ff;
     font-weight: bold;
     font-size: 16px;
 }
 
-.dark .mind-map-node.is-root {
+.dark .universal-node.is-root {
     background: #111d2c;
     border-color: #177ddc;
-}
-
-/* 编辑器样式 */
-.markdown-editor {
-    width: 100%;
-    height: 100%;
-    border: none;
-    background: transparent;
-    outline: none;
-    resize: none;
-    font-family: inherit;
-    font-size: 14px;
-    line-height: 1.5;
-    padding: 0;
-    margin: 0;
-    overflow: hidden;
-    color: inherit;
-}
-
-/* 幽灵元素样式 (必须与 editor 一致) */
-.ghost-text {
-    visibility: hidden;
-    white-space: pre-wrap;
-    word-wrap: break-word;
-    font-family: inherit;
-    font-size: 14px;
-    line-height: 1.5;
-    grid-area: 1 / 1 / 2 / 2;
-    /* 占据 Grid 第一格 */
-}
-
-/* 自动模式下，Textarea 绝对定位覆盖 Ghost */
-.markdown-editor.absolute-fill {
-    position: absolute;
-    top: 0;
-    left: 0;
-}
-
-/* Markdown 预览样式 */
-.markdown-body {
-    font-size: 14px;
-    line-height: 1.5;
-    word-wrap: break-word;
-}
-
-.markdown-body :deep(h1),
-.markdown-body :deep(h2) {
-    margin: 0.2em 0;
-    font-size: 1.2em;
-    border-bottom: 1px solid var(--border-color);
-}
-
-.markdown-body :deep(p) {
-    margin: 0;
-}
-
-.markdown-body :deep(ul) {
-    padding-left: 20px;
-    margin: 0;
 }
 
 /* Handle 样式 */
@@ -268,8 +200,8 @@ const renderedMarkdown = computed(() => md.render(localContent.value))
     transition: opacity 0.2s;
 }
 
-.mind-map-node:hover .io-handle,
-.mind-map-node.selected .io-handle {
+.universal-node:hover .io-handle,
+.universal-node.selected .io-handle {
     opacity: 1;
 }
 
@@ -287,11 +219,14 @@ const renderedMarkdown = computed(() => md.render(localContent.value))
     border-bottom: 3px solid #ff4d4f !important;
 }
 
+.dragging {
+    opacity: 0.5;
+}
 
 .debug-info {
     position: absolute;
     /* 向上偏移，数值等于标签高度 + 间距 */
-    top: -20px;
+    top: -26px;
     left: 0;
 
     /* 样式美化 */

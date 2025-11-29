@@ -11,22 +11,21 @@ import '@vue-flow/core/dist/theme-default.css'
 import '@vue-flow/controls/dist/style.css'
 
 import OriginNode from '@/components/OriginNode.vue'
-import MarkdownNode from '@/components/MarkdownNode.vue'
-import MindMapNode from '@/components/MindMapNode.vue'
 
 import { useCanvasStore } from '@/stores/canvasStore'
 
 import { useDark, useToggle } from '@vueuse/core'
 
 import { snapToGrid } from '@/utils/grid'
+import UniversalNode from '@/components/UniversalNode.vue'
 
 // #region 初始化
 
 // 自定义节点
 const nodeTypes: NodeTypesObject = {
     origin: markRaw(OriginNode as any),
-    markdown: markRaw(MarkdownNode as any),
-    'mindmap': markRaw(MindMapNode),
+    markdown: markRaw(UniversalNode),
+    'mindmap': markRaw(UniversalNode),
 }
 
 // 数据单例

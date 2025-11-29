@@ -175,7 +175,7 @@ function generateVueFlowElements(rootD3: ExtendedNode, logicRoot: LogicNode) {
                 target: d.data.id,
                 type: 'smoothstep',
                 animated: false,
-                style: { stroke: '#b1b1b7', strokeWidth: 2 },
+                style: { stroke: '#177ddc', strokeWidth: 2 },
             });
         }
     });

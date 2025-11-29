@@ -4,9 +4,9 @@
 
 <template>
   <div class="origin-gizmo">
-    <svg width="1" height="20" style="overflow: visible;">
+    <svg width="1" height="13" style="overflow: visible;">
       <line x1="-5000" y1="0" x2="5000" y2="0" stroke="#ff4d4f" stroke-width="2" stroke-opacity="0.3" />
-      <line x1="0" y1="-5000" x2="0" y2="5000" stroke="#52c41a" stroke-width="2" stroke-opacity="0.3" />
+      <line x1="1" y1="-5000" x2="1" y2="5000" stroke="#52c41a" stroke-width="2" stroke-opacity="0.3" />
       
       <!-- <circle cx="0" cy="0" r="4" fill="#1890ff" /> -->
       
