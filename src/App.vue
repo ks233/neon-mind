@@ -141,12 +141,6 @@ const edgeColor = computed(() => isDark.value ? '#666' : '#b1b1b7')
 
 const { getIntersectingNodes } = useVueFlow()
 
-// === 拖拽状态管理 ===
-// 记录当前"瞄准"的目标节点 ID，用于 UI 高亮
-const dragTargetId = ref<string | null>(null)
-// 记录当前的意图：'child' | 'above' | 'below'
-const dragIntent = ref<'child' | 'above' | 'below' | null>(null)
-
 // 1. 拖拽中 (Update Loop)
 function onNodeDrag(e: NodeDragEvent) {
     // 只处理单选拖拽，且拖拽的是思维导图节点
@@ -159,14 +153,6 @@ function onNodeDrag(e: NodeDragEvent) {
 
     // 过滤：只关心思维导图节点，且忽略自己和自己的子孙(可选，store里有校验)
     const targetNode = intersections.find(n => n.type === 'mindmap' && n.id !== draggedNode.id)
-
-    if (targetNode) {
-        dragTargetId.value = targetNode.id
-        dragIntent.value = calculateIntent(draggedNode, targetNode)
-    } else {
-        dragTargetId.value = null
-        dragIntent.value = null
-    }
 
     if (targetNode) {
         // 更新 Store 的 UI 状态
@@ -182,11 +168,11 @@ function onNodeDrag(e: NodeDragEvent) {
 function onNodeDragStop(e: NodeDragEvent) {
     const draggedNode = e.node
 
-    if (dragTargetId.value && dragIntent.value && draggedNode.type === 'mindmap') {
-        console.log(`Moving ${draggedNode.id} -> ${dragTargetId.value} (${dragIntent.value})`)
+    if (store.highlightTargetId && store.highlightIntent && draggedNode.type === 'mindmap') {
+        console.log(`Moving ${draggedNode.id} -> ${store.highlightTargetId} (${store.highlightIntent})`)
 
         // 调用 Store 执行逻辑
-        store.moveMindMapNodeTo(draggedNode.id, dragTargetId.value, dragIntent.value)
+        store.moveMindMapNodeTo(draggedNode.id, store.highlightTargetId, store.highlightIntent)
     }
 
     e.nodes.forEach((node) => {
@@ -196,8 +182,6 @@ function onNodeDragStop(e: NodeDragEvent) {
     store.syncModelToView()
 
     // 清理状态
-    dragTargetId.value = null
-    dragIntent.value = null
     store.highlightTargetId = null
     store.highlightIntent = null
 }
