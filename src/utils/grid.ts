@@ -11,3 +11,8 @@ export const GRID_SIZE = 20;
 export function snapToGrid(value: number, gridSize: number = GRID_SIZE): number {
     return Math.round(value / gridSize) * gridSize;
 }
+
+export function ceilToGrid(value: number, gridSize: number = GRID_SIZE): number {
+  if (value % gridSize === 0) return value;
+  return Math.ceil(value / gridSize) * gridSize;
+}

@@ -1,190 +1,184 @@
 import type { LogicNode } from '@/types/model';
 import type { Node, Edge } from '@vue-flow/core';
 import { createVisualNode } from '@/utils/transformers';
-import { tree, hierarchy, type HierarchyNode } from 'd3-hierarchy';
-import { snapToGrid } from '@/utils/grid'
+import { NODE_CONSTANTS, LAYOUT_CONSTANTS } from '@/config/layoutConfig';
+import { ceilToGrid } from '@/utils/grid';
 
-// === 类型定义 (让 TS 知道我们在 D3 节点上挂载了什么数据) ===
-interface LayoutData extends LogicNode {
-    // 这里可以扩展 LogicNode
+// === 自定义布局节点 ===
+// 这是一个临时对象，仅在排版计算期间存在
+class LayoutNode {
+  data: LogicNode;
+  parent?: LayoutNode;
+  children: LayoutNode[] = [];
+
+  // 尺寸数据
+  width: number = 0;
+  height: number = 0;
+  areaHeight: number = 0; // 子树占据的总高度
+
+  // 坐标数据 (直接存储相对于父级的 Top-Left 坐标，或者相对根的坐标)
+  x: number = 0;
+  y: number = 0;
+
+  constructor(data: LogicNode) {
+    this.data = data;
+  }
 }
 
-// 扩展 D3 的 HierarchyNode，声明我们计算过程中的临时属性
-interface ExtendedNode extends HierarchyNode<LogicNode> {
-    areaHeight?: number; // 子树总高度
-    layoutX?: number;    // 计算出的相对 X
-    layoutY?: number;    // 计算出的相对 Y (垂直中心)
-}
+// src/services/layoutService.ts
 
-// 配置常量
-const CONFIG = {
-    H_GAP: 80, // 水平间距 (父子之间)
-    V_GAP: 20, // 垂直间距 (兄弟之间)
-    DEFAULT_W: 150,
-    DEFAULT_H: 40
-};
-
-// ==========================================================
-// 主函数 (Orchestrator)
-// ==========================================================
 export async function computeMindMapLayout(rootNode: LogicNode, allNodes: Record<string, LogicNode>) {
+  // 1. 构建树 (Build Tree)
+  // 将 LogicNode 转换为带有父子引用的 LayoutNode
+  const root = buildLayoutTree(rootNode, allNodes);
 
-    // 1. 构建层级数据
-    // 将数据封装为 ExtendedNode（D3 的 HierarchyNode + 自定义属性）组成的树，可以用 ExtendedNode.data 访问 LogicNode
-    // 建树，lambda 函数用于寻找下一个节点
-    // .filter(Boolean) 用于剔除 undefined
-    const rootD3 = hierarchy(rootNode, (d) => {
-        return d.childrenIds.map(id => allNodes[id]).filter(Boolean);
-    }) as ExtendedNode;
+  // 2. 测量 (Measure - Post Order)
+  // 自底向上计算宽高和包围盒
+  measureNodes(root);
 
-    // 2. 测量阶段 (自底向上): 计算每个节点撑开的包围盒高度
-    // 实际上整个过程中只用到了 D3 的建树和先序/后续遍历功能，而并没有调用排版算法。
-    // 具体的排版算法是手动实现的。
-    measureSubtrees(rootD3);
+  // 3. 布局 (Layout - Pre Order)
+  // 自顶向下计算最终 X, Y 坐标
+  layoutNodes(root);
 
-    // 3. 布局阶段 (自顶向下): 计算具体的 X, Y 坐标
-    calculateCoordinates(rootD3);
-
-    // 4. 生成阶段: 转换为 Vue Flow 数据结构
-    return generateVueFlowElements(rootD3, rootNode);
+  // 4. 生成 (Generate)
+  // 转换为 Vue Flow 格式
+  return generateElements(root, rootNode);
 }
 
 // ==========================================================
-// 子函数 1: 测量子树高度 (Bottom-Up)
+// 1. 构建树 (Recursive)
 // ==========================================================
-function measureSubtrees(node: ExtendedNode) {
-    // 这一步是为了得到每个节点的 .areaHeight
-    // 后序遍历 (Post-Order): 先子后父
-    node.eachAfter((d) => {
-        const dExt = d as ExtendedNode;
-        const myHeight = d.data.height || CONFIG.DEFAULT_H;
+function buildLayoutTree(logic: LogicNode, allNodes: Record<string, LogicNode>, parent?: LayoutNode): LayoutNode {
+  const node = new LayoutNode(logic);
+  node.parent = parent;
 
-        // 如果没有子节点，高度就是自身高度
-        if (!d.children || d.children.length === 0) {
-            dExt.areaHeight = myHeight;
-            return;
-        }
-
-        // 如果有子节点，计算所有子节点堆叠起来的高度
-        let childrenTotalHeight = 0;
-        d.children.forEach((child, index) => {
-            const childExt = child as ExtendedNode;
-            childrenTotalHeight += (childExt.areaHeight || 0);
-
-            // 加上间隙 (除了最后一个)
-            if (index < d.children!.length - 1) {
-                childrenTotalHeight += CONFIG.V_GAP;
-            }
-        });
-
-        // 核心逻辑: 取 自身高度 与 子树堆叠高度 的最大值
-        // 这样能保证大节点不会被遮挡，大子树也不会重叠
-        dExt.areaHeight = Math.max(myHeight, childrenTotalHeight);
-    });
+  if (logic.childrenIds && logic.childrenIds.length > 0) {
+    node.children = logic.childrenIds
+      .map(id => allNodes[id])
+      .filter(Boolean)
+      .map(childLogic => buildLayoutTree(childLogic, allNodes, node));
+  }
+  
+  return node;
 }
 
 // ==========================================================
-// 子函数 2: 计算坐标 (Top-Down)
+// 2. 测量阶段 (Bottom-Up)
 // ==========================================================
-function calculateCoordinates(root: ExtendedNode) {
-    // 初始化根节点
-    root.layoutX = 0;
-    root.layoutY = 0;
+function measureNodes(node: LayoutNode) {
+  // 先递归处理子节点
+  node.children.forEach(measureNodes);
 
-    // 前序遍历 (Pre-Order): 先父后子
-    root.eachBefore((d) => {
-        const dExt = d as ExtendedNode;
+  // A. 确定自身尺寸 (应用配置的最小值和估算逻辑)
+  const contentLen = node.data.content.length;
+  // 优先用 model 里的 width，没有则估算
+  const rawWidth = node.data.width || Math.max(
+    NODE_CONSTANTS.MIN_WIDTH,
+    (contentLen * NODE_CONSTANTS.CHAR_WIDTH) + NODE_CONSTANTS.PADDING_X
+  );
+  // 优先用 model 里的 height
+  const rawHeight = node.data.height || NODE_CONSTANTS.MIN_HEIGHT;
 
-        // A. 计算当前节点的 X (基于父节点累加)
-        if (d.parent) {
-            const parentExt = d.parent as ExtendedNode;
-            const parentWidth = parentExt.data.width || CONFIG.DEFAULT_W;
+  // 向上取整吸附网格
+  node.width = ceilToGrid(rawWidth);
+  node.height = ceilToGrid(rawHeight);
 
-            dExt.layoutX = (parentExt.layoutX || 0) + parentWidth + CONFIG.H_GAP;
-        }
-
-        // B. 计算子节点的 Y (垂直居中于父节点)
-        if (d.children && d.children.length > 0) {
-            const children = d.children as ExtendedNode[];
-
-            // 1. 计算纯子节点群的总高度 (不含父节点自身对比，只看子节点列表)
-            const childrenContentHeight = children.reduce((acc, child, idx) => {
-                const gap = idx < children.length - 1 ? CONFIG.V_GAP : 0;
-                return acc + (child.areaHeight || 0) + gap;
-            }, 0);
-
-            // 2. 确定子节点群的起始 Y 坐标 (Top)
-            // 父节点中心 - 子群高度的一半
-            let currentChildY = (dExt.layoutY || 0) - (childrenContentHeight / 2);
-
-            // 3. 逐个放置子节点
-            children.forEach((child) => {
-                const childArea = child.areaHeight || 0;
-
-                // 子节点的中心 Y = 当前起始线 + 子树高度的一半
-                child.layoutY = currentChildY + (childArea / 2);
-
-                // 推进起始线 (为下一个兄弟留位置)
-                currentChildY += childArea + CONFIG.V_GAP;
-            });
-        }
+  // B. 计算子树包围盒 (Area Height)
+  if (node.children.length === 0) {
+    node.areaHeight = node.height;
+  } else {
+    // 子节点群的总高度
+    let childrenTotalHeight = 0;
+    node.children.forEach((child, index) => {
+      childrenTotalHeight += child.areaHeight;
+      if (index < node.children.length - 1) {
+        childrenTotalHeight += LAYOUT_CONSTANTS.V_GAP;
+      }
     });
+
+    // 核心排版逻辑：取 自身高度 与 子树高度 的最大值
+    node.areaHeight = Math.max(node.height, childrenTotalHeight);
+  }
 }
 
 // ==========================================================
-// 子函数 3: 生成结果 (Transformation)
+// 3. 布局阶段 (Top-Down)
 // ==========================================================
-function generateVueFlowElements(rootD3: ExtendedNode, logicRoot: LogicNode) {
-    const resultNodes: Node[] = [];
-    const resultEdges: Edge[] = [];
+function layoutNodes(node: LayoutNode) {
+  // 此时 node.x 和 node.y 已经在父节点的计算中被赋值了 (或者 root 为 0,0)
+  
+  if (node.children.length > 0) {
+    // A. 计算子节点群的起始 X
+    // Child X = Parent X + Parent Width + Gap
+    const childX = node.x + node.width + LAYOUT_CONSTANTS.H_GAP;
 
-    // [锚点数据]
-    // startX/Y 是根节点的世界坐标 (Top-Left)
-    const startX = logicRoot.position?.x || 0;
-    const startY = logicRoot.position?.y || 0;
+    // B. 计算子节点群的起始 Y
+    // 我们要让 "子节点群" 垂直居中于 "当前节点"
+    // Center Y = Node Top + Node Height / 2
+    const centerY = node.y + (node.height / 2);
+    
+    // 计算子群总高度 (注意：这里要重新算一遍纯累加高度，不能直接用 max 过的 areaHeight)
+    const childrenBlockHeight = node.children.reduce((acc, child, idx) => {
+      return acc + child.areaHeight + (idx < node.children.length - 1 ? LAYOUT_CONSTANTS.V_GAP : 0);
+    }, 0);
 
-    // 获取根节点的高度 (用于修正中心点偏移)
-    // 注意：这里必须和下面 dExt.data.height 获取逻辑一致，优先取 store 里的 height
-    const rootHeight = logicRoot.height || CONFIG.DEFAULT_H;
+    // Child Start Y = Center Y - (Block Height / 2)
+    let currentChildY = centerY - (childrenBlockHeight / 2);
 
-    rootD3.descendants().forEach((d) => {
-        const dExt = d as ExtendedNode;
+    // C. 遍历赋值
+    node.children.forEach(child => {
+      child.x = childX;
+      
+      // 子节点要在自己的 areaHeight 区域内垂直居中
+      // 现在的 currentChildY 是 child 的 area 顶部
+      // child 自身的顶部 = area 顶部 + (area高度 - 自身高度)/2
+      const childOffset = (child.areaHeight - child.height) / 2;
+      child.y = currentChildY + childOffset;
 
-        // 1. 获取布局相对坐标
-        // layoutX 是左边缘 (Left), layoutY 是垂直中心 (Center Y)
-        const relativeLeft = dExt.layoutX || 0;
-        const relativeCenterY = dExt.layoutY || 0;
+      // 递归处理下一层
+      layoutNodes(child);
 
-        const nodeHeight = d.data.height || CONFIG.DEFAULT_H;
-
-        // 2. [核心修复] 坐标转换公式
-        // 我们要确保：当 d 是根节点时(relative=0)，计算结果 = startY
-
-        // X 轴直接累加 (因为 layoutX 就是 Left)
-        const finalX = startX + relativeLeft;
-
-        // Y 轴转换：
-        // 根节点的世界中心 = startY + (rootHeight / 2)
-        // 当前节点的世界中心 = 根节点世界中心 + relativeCenterY
-        // 当前节点的世界Top  = 当前节点世界中心 - (nodeHeight / 2)
-        const finalY = (startY + rootHeight / 2) + relativeCenterY - (nodeHeight / 2);
-        const snappedX = snapToGrid(finalX);
-        const snappedY = snapToGrid(finalY);
-        // 3. 生成 Vue Node
-        resultNodes.push(createVisualNode(d.data, { x: snappedX, y: snappedY }));
-
-        // 4. 生成 Vue Edge
-        if (d.parent) {
-            resultEdges.push({
-                id: `e-${d.parent.data.id}-${d.data.id}`,
-                source: d.parent.data.id,
-                target: d.data.id,
-                type: 'smoothstep',
-                animated: false,
-                style: { stroke: '#177ddc', strokeWidth: 2 },
-            });
-        }
+      // 推进 Y 游标
+      currentChildY += child.areaHeight + LAYOUT_CONSTANTS.V_GAP;
     });
+  }
+}
 
-    return { nodes: resultNodes, edges: resultEdges };
+// ==========================================================
+// 4. 生成 Vue Flow 元素
+// ==========================================================
+function generateElements(root: LayoutNode, logicRoot: LogicNode) {
+  const resultNodes: Node[] = [];
+  const resultEdges: Edge[] = [];
+
+  // 获取全局偏移量
+  const startX = logicRoot.position?.x || 0;
+  const startY = logicRoot.position?.y || 0;
+
+  // 简单的递归遍历收集结果
+  function traverse(node: LayoutNode) {
+    // 现在的 node.x / node.y 已经是相对于根节点的 Top-Left 坐标了
+    // 直接加上全局偏移即可，不需要烧脑的中心点换算！
+    const finalX = startX + node.x;
+    const finalY = startY + node.y;
+
+    resultNodes.push(createVisualNode(node.data, { x: finalX, y: finalY }));
+
+    if (node.parent) {
+      resultEdges.push({
+        id: `e-${node.parent.data.id}-${node.data.id}`,
+        source: node.parent.data.id,
+        target: node.data.id,
+        type: 'smoothstep',
+        animated: false,
+        style: { stroke: '#177ddc', strokeWidth: 2 },
+      });
+    }
+
+    node.children.forEach(traverse);
+  }
+
+  traverse(root);
+
+  return { nodes: resultNodes, edges: resultEdges };
 }
