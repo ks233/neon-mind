@@ -59,10 +59,14 @@ async function computeMindMapLayout(rootNode: LogicNode, allNodes: Record<string
         layoutOptions: {
             'elk.algorithm': 'layered',
             'elk.direction': 'RIGHT',
+            'elk.alignment': 'LEFT',
             'elk.spacing.nodeNode': '30',
             'elk.layered.spacing.nodeNodeBetweenLayers': '100',
+            
+            'elk.layered.nodePlacement.strategy': 'BRANDES_KOEPF',
+            'elk.layered.mergeEdges': 'false',
+            'elk.layered.nodePlacement.bk.fixedAlignment': 'BALANCED',
 
-            // [!code focus:4] === 核心修正：强制固定顺序 ===
             // 告诉 ELK：请严格尊重我传入的数据顺序，不要自己瞎优化
             'elk.layered.considerModelOrder.strategy': 'NODES_AND_EDGES',
             'elk.layered.crossingMinimization.strategy': 'NONE', // 关闭交叉最小化，进一步防止乱序
@@ -141,7 +145,6 @@ async function computeMindMapLayout(rootNode: LogicNode, allNodes: Record<string
                         type: 'smoothstep',
                         animated: false,
                         selectable: false,
-                        
                     });
                 }
             });
