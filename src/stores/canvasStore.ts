@@ -20,14 +20,29 @@ export const useCanvasStore = defineStore('canvas', () => {
     const dragTargetId = ref<string | null>(null);
     const dragIntent = ref<'child' | 'above' | 'below' | null>(null);
 
+    // 坐标轴 UI 节点
+    const worldOriginNode : Node = {
+            id: 'world-origin',
+            type: 'origin', // 对应上面的 key
+            position: { x: 0, y: 0 },
+            data: {},
+            draggable: false, // 禁止拖拽
+            selectable: false, // 禁止选中
+            zIndex: -1,
+        };
+
     // === 2. View (Render State / GameObjects) ===
-    const vueNodes = ref<Node[]>([]);
+    const vueNodes = ref<Node[]>([worldOriginNode]);
     const vueEdges = ref<Edge[]>([]);
     // #endregion
 
+
+
     // #region 【数据 -> UI】刷新
+
+
     async function syncModelToView() {
-        const nextNodes: Node[] = [];
+        const nextNodes: Node[] = [worldOriginNode];
         const nextEdges: Edge[] = [];
 
         // 1. 处理所有游离连线 (LogicEdge -> VueEdge)
@@ -63,6 +78,7 @@ export const useCanvasStore = defineStore('canvas', () => {
         // 3. 提交到显存
         vueNodes.value = nextNodes;
         vueEdges.value = nextEdges;
+
     }
 
     function updateEdgesModel(viewEdges: Edge[]) {
@@ -357,6 +373,8 @@ export const useCanvasStore = defineStore('canvas', () => {
         model,
         vueNodes,
         vueEdges,
+        dragTargetId,
+        dragIntent,
         // Actions
         addFreeNode,
         addMindMapRoot,
@@ -370,7 +388,5 @@ export const useCanvasStore = defineStore('canvas', () => {
         moveMindMapNode,
         moveMindMapNodeTo,
         updateNodeSize,
-        dragTargetId,
-        dragIntent
     };
 });
