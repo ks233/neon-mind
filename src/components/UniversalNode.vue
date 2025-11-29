@@ -94,14 +94,13 @@ function onResizeEnd(evt: any) {
             'drag-over-child': isTarget && intent === 'child',
             'drag-over-above': isTarget && intent === 'above',
             'drag-over-below': isTarget && intent === 'below',
-            'dragging' : dragging
+            'dragging': dragging
         }"
         :style="isFixedSize ? { width: `${props.dimensions.width}px`, height: `${props.dimensions.height}px` } : {}"
         @dblclick="onDblClick"
 
         @mouseenter="showDebug = true"
-        @mouseleave="showDebug = false"
-        tabindex="0">
+        @mouseleave="showDebug = false">
 
         <NodeResizer
             :is-visible="selectedRef"
@@ -115,20 +114,21 @@ function onResizeEnd(evt: any) {
         <Handle id="right" type="source" :position="Position.Right" class="io-handle" />
         <Handle id="bottom" type="source" :position="Position.Bottom" class="io-handle" />
 
-        <component
-            :is="ContentMarkdown"
-            :content="data.content"
-            :fixed-size="isFixedSize"
-            :is-editing="isEditing"
-            @update:content="onContentUpdate"
-            @blur="isEditing = false" />
-    </div>
-            <div v-show="showDebug" class="debug-info">
-            <span>({{ Math.round(position.x) }}, {{ Math.round(position.y || 0) }}) </span>
-            <span>({{ Math.round(dimensions.width) }}, {{ Math.round(dimensions.height || 0) }}) </span>
-            <span style="color: #ff4d4f">{{ id.substring(0, 8) }}</span><br>
-            <div>{{ JSON.stringify(props, null, 4) }}</div>
+        <div class="content-wrapper">
+            <component
+                :is="ContentMarkdown"
+                :content="data.content"
+                :fixed-size="isFixedSize"
+                :is-editing="isEditing"
+                @update:content="onContentUpdate"
+                @blur="isEditing = false" />
         </div>
+    </div>
+    <div v-show="showDebug" class="debug-info">
+        <span>({{ Math.round(position.x) }}, {{ Math.round(position.y || 0) }}) </span>
+        <span>({{ Math.round(dimensions.width) }}, {{ Math.round(dimensions.height || 0) }}) </span>
+        <span style="color: #ff4d4f">{{ id.substring(0, 8) }}</span><br>
+    </div>
 </template>
 
 <style scoped>
@@ -143,8 +143,7 @@ function onResizeEnd(evt: any) {
     flex-direction: column;
     overflow: hidden;
     box-sizing: border-box;
-    /* transition: box-shadow 0.2s, border-color 0.2s; */
-    transition: all 0.2s;
+    transition: box-shadow 0.2s, border-color 0.2s;
 }
 
 /* === 模式 A: 自动大小 === */
@@ -167,9 +166,9 @@ function onResizeEnd(evt: any) {
     flex: 1;
     position: relative;
     display: grid;
-    /* 关键：让 Ghost 和 Textarea 重叠 */
     min-height: 24px;
-    padding: 8px 12px;
+    padding: 6px;
+    overflow: hidden;
 }
 
 /* 选中状态 */

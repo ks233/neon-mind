@@ -30,11 +30,16 @@ const CONFIG = {
 export async function computeMindMapLayout(rootNode: LogicNode, allNodes: Record<string, LogicNode>) {
 
     // 1. 构建层级数据
+    // 将数据封装为 ExtendedNode（D3 的 HierarchyNode + 自定义属性）组成的树，可以用 ExtendedNode.data 访问 LogicNode
+    // 建树，lambda 函数用于寻找下一个节点
+    // .filter(Boolean) 用于剔除 undefined
     const rootD3 = hierarchy(rootNode, (d) => {
         return d.childrenIds.map(id => allNodes[id]).filter(Boolean);
     }) as ExtendedNode;
 
     // 2. 测量阶段 (自底向上): 计算每个节点撑开的包围盒高度
+    // 实际上整个过程中只用到了 D3 的建树和先序/后续遍历功能，而并没有调用排版算法。
+    // 具体的排版算法是手动实现的。
     measureSubtrees(rootD3);
 
     // 3. 布局阶段 (自顶向下): 计算具体的 X, Y 坐标
@@ -48,6 +53,7 @@ export async function computeMindMapLayout(rootNode: LogicNode, allNodes: Record
 // 子函数 1: 测量子树高度 (Bottom-Up)
 // ==========================================================
 function measureSubtrees(node: ExtendedNode) {
+    // 这一步是为了得到每个节点的 .areaHeight
     // 后序遍历 (Post-Order): 先子后父
     node.eachAfter((d) => {
         const dExt = d as ExtendedNode;

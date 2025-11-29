@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, markRaw, nextTick } from 'vue'
-import { VueFlow, useVueFlow } from '@vue-flow/core'
+import { VueFlow, useVueFlow, SelectionMode } from '@vue-flow/core'
 import type { Connection, NodeTypesObject, Node, Edge, GraphEdge, EdgeMouseEvent, NodeRemoveChange, NodeDragEvent, NodeChange, EdgeChange, GraphNode } from '@vue-flow/core'
 import { Background } from '@vue-flow/background'
 import { Controls } from '@vue-flow/controls'
@@ -212,7 +212,6 @@ function calculateIntent(source: GraphNode, target: GraphNode): 'child' | 'above
         return 'child' // 命中中心
     }
 }
-
 // #endregion
 
 </script>
@@ -236,7 +235,7 @@ function calculateIntent(source: GraphNode, target: GraphNode): 'child' | 'above
                 style: { strokeWidth: 6, color: edgeColor },
                 interactionWidth: 50,
             }"
-
+            :selection-mode="SelectionMode.Partial"
             :edges-updatable="true"
             @edge-update-start="onEdgeUpdateStart"
             @edge-update="onEdgeUpdate"
@@ -248,7 +247,7 @@ function calculateIntent(source: GraphNode, target: GraphNode): 'child' | 'above
             @edges-change="onEdgesChange"
             :snap-to-grid="true"
             :snap-grid="[gridSize, gridSize]">
-            <Background variant="dots" :gap="gridSize" :color="gridColor" :size="2" :offset="[20,20]" />
+            <Background variant="dots" :gap="gridSize" :color="gridColor" :size="2" :offset="[20, 20]" />
             <!-- <Controls /> -->
         </VueFlow>
     </div>

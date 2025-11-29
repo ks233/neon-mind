@@ -37,7 +37,6 @@ function onBlur() {
 </script>
 
 <template>
-  <div class="content-wrapper">
     <template v-if="isEditing">
       <div 
         v-if="!fixedSize" 
@@ -61,7 +60,6 @@ function onBlur() {
       class="markdown-body"
       v-html="renderedMarkdown"
     ></div>
-  </div>
 </template>
 
 <style scoped>
@@ -78,7 +76,8 @@ function onBlur() {
     font-family: inherit;
     font-size: 14px;
     line-height: 1.5;
-    margin: 0;
+    /* padding: 0; */
+    /* margin: 0; */
     overflow: hidden;
     color: inherit;
 }
