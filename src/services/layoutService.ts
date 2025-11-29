@@ -1,155 +1,96 @@
-import ELK, { type ElkNode } from 'elkjs/lib/elk.bundled.js';
-import type { LogicNode, CanvasModel } from '../types/model';
+import type { LogicNode } from '../types/model';
 import type { Node, Edge } from '@vue-flow/core';
 import { createVisualNode } from '../utils/transformers';
-
-const elk = new ELK();
+import { tree, hierarchy } from 'd3-hierarchy';
 
 export { computeMindMapLayout }
 
 async function computeMindMapLayout(rootNode: LogicNode, allNodes: Record<string, LogicNode>) {
-    // 1. 准备 ELK 需要的容器 (Graph Container)
-    // 我们把整棵思维导图看作一个巨大的 Group，里面的节点都是平级的
-    const elkNodes: ElkNode[] = [];
-    const elkEdges: any[] = [];
+    // 配置常量
+    const H_GAP = 80; // 水平间距 (Edge Length): 父节点右侧到子节点左侧的距离
+    const V_GAP = 20; // 垂直间距 (Sibling Gap): 相邻兄弟节点之间的最小空隙
 
-    // 2. 广度优先/递归遍历逻辑树，把它拍平 (Flatten)
-    // 我们需要一个队列来遍历 LogicNode 树
-    const queue = [rootNode];
-    const visited = new Set<string>();
+    // 1. 构建 D3 需要的层级数据结构
+    const hierarchyData = hierarchy(rootNode, (d) => {
+        return d.childrenIds.map(id => allNodes[id]).filter(Boolean);
+    });
 
-    while (queue.length > 0) {
-        const curr = queue.shift()!;
-        if (visited.has(curr.id)) continue;
-        visited.add(curr.id);
-
-        const nodeWidth = curr.width || Math.max(150, curr.content.length * 8 + 30);
-        const nodeHeight = curr.height || 60;
-
-        // A. 添加节点到 ELK 平铺列表
-        elkNodes.push({
-            id: curr.id,
-            width: nodeWidth,
-            height: nodeHeight,
+    // 2. 配置树状布局
+    // nodeSize([height, width]) -> D3 默认 x=垂直, y=水平
+    // 这里我们只利用 D3 来计算垂直位置 (Y轴) 的拓扑关系
+    const mindMapTree = tree<LogicNode>()
+        .nodeSize([1, 1]) // 基础单位设为1，具体距离全靠 separation 控制
+        .separation((a, b) => {
+            // [核心算法] 动态垂直间距计算
+            // 距离 = (A高度的一半 + B高度的一半) + 固定缝隙
+            // 这样确保无论节点多高，它们之间永远保留 V_GAP 的空隙，且垂直重心对齐
+            const aHeight = a.data.height || 40;
+            const bHeight = b.data.height || 40;
+            return (aHeight / 2) + (bHeight / 2) + V_GAP;
         });
 
-        // B. 处理子节点
-        if (curr.childrenIds && curr.childrenIds.length > 0) {
-            curr.childrenIds.forEach(childId => {
-                const childNode = allNodes[childId];
-                if (childNode) {
-                    // 添加到队列
-                    queue.push(childNode);
+    // 3. 执行布局计算 (此时 d.x 是垂直中心坐标，d.y 是默认层级坐标)
+    const rootD3 = mindMapTree(hierarchyData);
 
-                    // C. 添加连线关系 (Edge)
-                    // 这才是告诉 ELK "谁是谁父亲" 的关键，而不是用 children 嵌套
-                    elkEdges.push({
-                        id: `e-${curr.id}-${childNode.id}`,
-                        sources: [curr.id],
-                        targets: [childNode.id]
-                    });
-                }
-            });
-        }
-    }
-
-    // 3. 构建 ELK Root Graph
-    const elkGraph: ElkNode = {
-        id: 'root-graph',
-        layoutOptions: {
-            'elk.algorithm': 'layered',
-            'elk.direction': 'RIGHT',
-            'elk.alignment': 'LEFT',
-            'elk.spacing.nodeNode': '30',
-            'elk.layered.spacing.nodeNodeBetweenLayers': '100',
+    // 4. [核心修复] 手动计算横向坐标 (X轴)
+    // D3 默认假设每一层宽度固定，但这不符合思维导图（节点宽度不一）的需求。
+    // 我们手动遍历树，累加计算 X 坐标。
+    rootD3.each((d) => {
+        if (d.parent) {
+            // 这是一个累加过程：
+            // 子节点 X = 父节点 X + 父节点实际宽度 + 固定间距
+            // 我们把计算出的 visualX 挂载到 d 对象上临时存储
+            const parentX = (d.parent as any).visualX || 0;
             
-            'elk.layered.nodePlacement.strategy': 'BRANDES_KOEPF',
-            'elk.layered.mergeEdges': 'false',
-            'elk.layered.nodePlacement.bk.fixedAlignment': 'BALANCED',
+            // 获取父节点宽度，如果没有(比如刚创建)则给默认值 150
+            const parentWidth = d.parent.data.width || 150; 
+            
+            (d as any).visualX = parentX + parentWidth + H_GAP;
+        } else {
+            // 根节点相对 X 为 0
+            (d as any).visualX = 0;
+        }
+    });
 
-            // 告诉 ELK：请严格尊重我传入的数据顺序，不要自己瞎优化
-            'elk.layered.considerModelOrder.strategy': 'NODES_AND_EDGES',
-            'elk.layered.crossingMinimization.strategy': 'NONE', // 关闭交叉最小化，进一步防止乱序
-        },
-        children: elkNodes,
-        edges: elkEdges
-    };
-
-    // 4. 运行算法
-    const layoutedGraph = await elk.layout(elkGraph);
-
-    // 5. 将计算结果回填给 VueNodes
+    // 5. 将计算结果转换回 Vue Flow
     const resultNodes: Node[] = [];
     const resultEdges: Edge[] = [];
 
-    // 获取根节点在 ELK 里的计算位置，用于计算相对偏移
-    // 我们希望 Root 节点依然保持在它原来的 World Position
-    // 所以我们需要计算一个 "Delta"，把整棵树移过去
-    const elkRootNode = layoutedGraph.children?.find(n => n.id === rootNode.id);
+    // 计算偏移量：保持根节点在世界坐标系中的位置不变
+    const startX = rootNode.position?.x || 0;
+    const startY = rootNode.position?.y || 0;
+    
+    // 遍历所有后代节点
+    rootD3.descendants().forEach((d) => {
+        // [横向修复] 使用手动累加的 visualX
+        const relativeX = (d as any).visualX;
 
-    // 偏移量 = (用户设定的 Root 世界坐标) - (ELK 算出来的 Root 相对坐标)
-    const offsetX = (rootNode.position?.x || 0) - (elkRootNode?.x || 0);
-    const offsetY = (rootNode.position?.y || 0) - (elkRootNode?.y || 0);
+        // [纵向修复] 中心点修正 (Center Alignment Fix)
+        // d.x 是 D3 算出来的垂直中心线
+        // Vue Flow 渲染是以 Top-Left 为锚点
+        // 所以: Y = 中心线 - (高度 / 2)
+        const nodeHeight = d.data.height || 40;
+        const relativeY = d.x - (nodeHeight / 2);
 
-    if (layoutedGraph.children) {
-        layoutedGraph.children.forEach(elkNode => {
-            const logicNode = allNodes[elkNode.id];
-            if (!logicNode) return;
+        // 最终坐标 = 根节点世界坐标 + 相对偏移
+        const x = startX + relativeX;
+        const y = startY + relativeY;
 
-            // 应用偏移量，让树跟随后台的 Root Position
-            const finalX = (elkNode.x || 0) + offsetX;
-            const finalY = (elkNode.y || 0) + offsetY;
+        // 生成节点
+        resultNodes.push(createVisualNode(d.data, { x, y }));
 
-            // 生成 Vue Node
-            resultNodes.push(createVisualNode(logicNode, { x: finalX, y: finalY }));
-        });
-    }
-
-    if (layoutedGraph.edges) {
-        layoutedGraph.edges.forEach(elkEdge => {
-            // 生成 Vue Edge
-            // 这里要小心，elkEdge.sources[0] 是节点 ID
-            // 但我们需要去原始数据里找 source 和 target
-            // 简单点直接用我们生成的 id 解析，或者直接从 elkEdge 对象读
-            // ELK edge 结构比较复杂，为了保险，我们直接重新生成一遍简单的连线
-            // 或者在这里解析: source = elkEdge.sources[0], target = elkEdge.targets[0]
-
-            // 更简单的做法：直接利用 Logic 数据生成连线，因为连线不需要坐标
-            // 只要节点坐标对了，Vue Flow 会自动画线
-            // 但如果想用 ELK 的路由点(sections)，则需要解析 sections
-            // 现阶段 MVP：让 Vue Flow 自己画线 (type: smoothstep)
-            // 只需要确保 edges 列表存在即可
-        });
-    }
-
-    // 重新遍历一遍 model 生成连线 (比解析 ELK edge 简单)
-    // 仅生成树内部的连线
-    queue.length = 0;
-    queue.push(rootNode);
-    visited.clear();
-
-    while (queue.length > 0) {
-        const curr = queue.shift()!;
-        if (visited.has(curr.id)) continue;
-        visited.add(curr.id);
-
-        if (curr.childrenIds) {
-            curr.childrenIds.forEach(childId => {
-                const childNode = allNodes[childId];
-                if (childNode) {
-                    queue.push(childNode);
-                    resultEdges.push({
-                        id: `e-${curr.id}-${childId}`,
-                        source: curr.id,
-                        target: childId,
-                        type: 'smoothstep',
-                        animated: false,
-                        selectable: false,
-                    });
-                }
+        // 生成连线 (Parent -> Child)
+        if (d.parent) {
+            resultEdges.push({
+                id: `e-${d.parent.data.id}-${d.data.id}`,
+                source: d.parent.data.id,
+                target: d.data.id,
+                type: 'smoothstep', 
+                animated: false,
+                style: { stroke: '#b1b1b7', strokeWidth: 2 },
             });
         }
-    }
+    });
 
     return { nodes: resultNodes, edges: resultEdges };
 }
