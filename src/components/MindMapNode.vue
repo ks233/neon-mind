@@ -4,8 +4,8 @@ import { Handle, Position, useNode, type NodeProps } from '@vue-flow/core'
 import { useResizeObserver } from '@vueuse/core'
 import { NodeResizer } from '@vue-flow/node-resizer'
 import MarkdownIt from 'markdown-it'
-import { useCanvasStore } from '../stores/canvasStore'
-import { useMindMapKeyboard } from '../composables/useMindMapShortcuts'
+import { useCanvasStore } from '@/stores/canvasStore'
+import { useMindMapKeyboard } from '@/composables/useMindMapShortcuts'
 import '@vue-flow/node-resizer/dist/style.css'
 
 // 定义 Props
@@ -15,6 +15,8 @@ interface NodeData {
     fixedSize?: boolean // 标记是否已被手动调整过大小
 }
 const props = defineProps<NodeProps<NodeData>>()
+
+const showDebug = ref(false)
 
 const { id } = useNode()
 const store = useCanvasStore()
@@ -83,7 +85,7 @@ const renderedMarkdown = computed(() => md.render(localContent.value))
         ref="containerRef"
         class="mind-map-node"
         :class="{
-            'is-root': data.isRoot, 
+            'is-root': data.isRoot,
             'selected': selectedRef,
             'auto-size': !isFixedSize,
             'fixed-size': isFixedSize,
@@ -93,8 +95,11 @@ const renderedMarkdown = computed(() => md.render(localContent.value))
         }"
         :style="isFixedSize ? { width: `${props.dimensions.width}px`, height: `${props.dimensions.height}px` } : {}"
         @dblclick="onDblClick"
+
+        @mouseenter="showDebug = true"
+        @mouseleave="showDebug = false"
         tabindex="0">
-        
+
         <NodeResizer
             :is-visible="selectedRef"
             :min-width="100"
@@ -107,14 +112,19 @@ const renderedMarkdown = computed(() => md.render(localContent.value))
         <Handle id="right" type="source" :position="Position.Right" class="io-handle" />
         <Handle id="bottom" type="source" :position="Position.Bottom" class="io-handle" />
 
+        <div v-show="showDebug" class="debug-info">
+            <span>({{ Math.round(position.x) }}</span>
+            <span>, {{ Math.round(position.y || 0) }}) </span>
+            <span style="color: #ff4d4f">{{ id.substring(0,8) }}</span>
+        </div>
+
         <div class="content-wrapper">
-            
+
             <template v-if="isEditing">
-                <div 
+                <div
                     v-if="!isFixedSize"
-                    class="ghost-text" 
-                    aria-hidden="true"
-                >{{ localContent }}<br/></div>
+                    class="ghost-text"
+                    aria-hidden="true">{{ localContent }}<br /></div>
 
                 <textarea
                     ref="textareaRef"
@@ -126,10 +136,7 @@ const renderedMarkdown = computed(() => md.render(localContent.value))
                     @keydown.stop></textarea>
             </template>
 
-            <div
-                v-else
-                class="markdown-body"
-                v-html="renderedMarkdown"></div>
+            <div v-else class="markdown-body" v-html="renderedMarkdown"></div>
         </div>
     </div>
 </template>
@@ -154,7 +161,8 @@ const renderedMarkdown = computed(() => md.render(localContent.value))
     width: fit-content;
     height: fit-content;
     min-width: 80px;
-    max-width: 400px; /* 限制最大宽度，超过自动换行 */
+    max-width: 400px;
+    /* 限制最大宽度，超过自动换行 */
 }
 
 /* === 模式 B: 固定大小 === */
@@ -167,7 +175,8 @@ const renderedMarkdown = computed(() => md.render(localContent.value))
 .content-wrapper {
     flex: 1;
     position: relative;
-    display: grid; /* 关键：让 Ghost 和 Textarea 重叠 */
+    display: grid;
+    /* 关键：让 Ghost 和 Textarea 重叠 */
     min-height: 24px;
     padding: 8px 12px;
 }
@@ -185,6 +194,7 @@ const renderedMarkdown = computed(() => md.render(localContent.value))
     font-weight: bold;
     font-size: 16px;
 }
+
 .dark .mind-map-node.is-root {
     background: #111d2c;
     border-color: #177ddc;
@@ -215,7 +225,8 @@ const renderedMarkdown = computed(() => md.render(localContent.value))
     font-family: inherit;
     font-size: 14px;
     line-height: 1.5;
-    grid-area: 1 / 1 / 2 / 2; /* 占据 Grid 第一格 */
+    grid-area: 1 / 1 / 2 / 2;
+    /* 占据 Grid 第一格 */
 }
 
 /* 自动模式下，Textarea 绝对定位覆盖 Ghost */
@@ -231,23 +242,32 @@ const renderedMarkdown = computed(() => md.render(localContent.value))
     line-height: 1.5;
     word-wrap: break-word;
 }
+
 .markdown-body :deep(h1),
 .markdown-body :deep(h2) {
     margin: 0.2em 0;
     font-size: 1.2em;
     border-bottom: 1px solid var(--border-color);
 }
-.markdown-body :deep(p) { margin: 0; }
-.markdown-body :deep(ul) { padding-left: 20px; margin: 0; }
+
+.markdown-body :deep(p) {
+    margin: 0;
+}
+
+.markdown-body :deep(ul) {
+    padding-left: 20px;
+    margin: 0;
+}
 
 /* Handle 样式 */
 .io-handle {
-    width: 8px;
-    height: 8px;
+    width: 4px;
+    height: 4px;
     background: var(--handle-color);
     opacity: 0;
     transition: opacity 0.2s;
 }
+
 .mind-map-node:hover .io-handle,
 .mind-map-node.selected .io-handle {
     opacity: 1;
@@ -258,6 +278,39 @@ const renderedMarkdown = computed(() => md.render(localContent.value))
     box-shadow: 0 0 0 3px #1890ff !important;
     background-color: rgba(24, 144, 255, 0.1);
 }
-.drag-over-above { border-top: 3px solid #ff4d4f !important; }
-.drag-over-below { border-bottom: 3px solid #ff4d4f !important; }
+
+.drag-over-above {
+    border-top: 3px solid #ff4d4f !important;
+}
+
+.drag-over-below {
+    border-bottom: 3px solid #ff4d4f !important;
+}
+
+
+.debug-info {
+    position: absolute;
+    /* 向上偏移，数值等于标签高度 + 间距 */
+    top: -20px;
+    left: 0;
+
+    /* 样式美化 */
+    background: rgba(0, 0, 0, 0.85);
+    color: #00ff9d;
+    /* Matrix Green */
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 11px;
+    font-family: 'Consolas', monospace;
+    line-height: 1;
+    white-space: nowrap;
+    /* 禁止换行 */
+    pointer-events: none;
+    /* 鼠标穿透，不挡操作 */
+    z-index: 9999;
+    /* 确保浮在所有东西上面 */
+
+    /* 可选：加个小阴影 */
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
 </style>

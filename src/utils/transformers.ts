@@ -1,5 +1,5 @@
 // src/utils/transformers.ts
-import type { LogicNode } from '../types/model';
+import type { LogicNode } from '@/types/model';
 import type { Node, XYPosition } from '@vue-flow/core';
 
 /**

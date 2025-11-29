@@ -4,9 +4,9 @@ import type { CanvasModel, LogicNode, LogicEdge } from '../types/model';
 import type { Node, Edge, XYPosition } from '@vue-flow/core';
 import { useVueFlow } from '@vue-flow/core';
 
-import { computeMindMapLayout } from '../services/layoutService';
+import { computeMindMapLayout } from '@/services/layoutService';
 
-import { createVisualNode } from '../utils/transformers';
+import { createVisualNode } from '@/utils/transformers';
 import { useDebounceFn } from '@vueuse/core';
 
 export const useCanvasStore = defineStore('canvas', () => {

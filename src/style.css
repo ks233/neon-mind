@@ -23,7 +23,7 @@ html.dark {
   --border-color: #3e3e3e;
   --grid-color: #3a3a3a;
   --line-color: #666;
-  --handle-color: #636363;
+  --handle-color: #444444;
 }
 
 /* 3. 全局重置 (Canvas Scaler: Expand) */

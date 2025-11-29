@@ -1,6 +1,6 @@
-import type { LogicNode } from '../types/model';
+import type { LogicNode } from '@/types/model';
 import type { Node, Edge } from '@vue-flow/core';
-import { createVisualNode } from '../utils/transformers';
+import { createVisualNode } from '@/utils/transformers';
 import { tree, hierarchy , type HierarchyNode} from 'd3-hierarchy';
 
 // === 类型定义 (让 TS 知道我们在 D3 节点上挂载了什么数据) ===
@@ -128,29 +128,44 @@ function calculateCoordinates(root: ExtendedNode) {
 // 子函数 3: 生成结果 (Transformation)
 // ==========================================================
 function generateVueFlowElements(rootD3: ExtendedNode, logicRoot: LogicNode) {
-  const resultNodes: Node[] = [];
+const resultNodes: Node[] = [];
   const resultEdges: Edge[] = [];
 
-  // 获取全局偏移量 (保持根节点在世界坐标系不动)
+  // [锚点数据]
+  // startX/Y 是根节点的世界坐标 (Top-Left)
   const startX = logicRoot.position?.x || 0;
   const startY = logicRoot.position?.y || 0;
+  
+  // 获取根节点的高度 (用于修正中心点偏移)
+  // 注意：这里必须和下面 dExt.data.height 获取逻辑一致，优先取 store 里的 height
+  const rootHeight = logicRoot.height || CONFIG.DEFAULT_H;
 
   rootD3.descendants().forEach((d) => {
     const dExt = d as ExtendedNode;
 
-    // 1. 坐标转换: 中心点 -> 左上角
-    const centerX = dExt.layoutX || 0;
-    const centerY = dExt.layoutY || 0;
+    // 1. 获取布局相对坐标
+    // layoutX 是左边缘 (Left), layoutY 是垂直中心 (Center Y)
+    const relativeLeft = dExt.layoutX || 0;
+    const relativeCenterY = dExt.layoutY || 0;
+    
     const nodeHeight = d.data.height || CONFIG.DEFAULT_H;
     
-    // Top-Left 坐标
-    const finalX = startX + centerX;
-    const finalY = startY + (centerY - (nodeHeight / 2));
+    // 2. [核心修复] 坐标转换公式
+    // 我们要确保：当 d 是根节点时(relative=0)，计算结果 = startY
+    
+    // X 轴直接累加 (因为 layoutX 就是 Left)
+    const finalX = startX + relativeLeft;
 
-    // 2. 生成 Vue Node
+    // Y 轴转换：
+    // 根节点的世界中心 = startY + (rootHeight / 2)
+    // 当前节点的世界中心 = 根节点世界中心 + relativeCenterY
+    // 当前节点的世界Top  = 当前节点世界中心 - (nodeHeight / 2)
+    const finalY = (startY + rootHeight / 2) + relativeCenterY - (nodeHeight / 2);
+
+    // 3. 生成 Vue Node
     resultNodes.push(createVisualNode(d.data, { x: finalX, y: finalY }));
 
-    // 3. 生成 Vue Edge
+    // 4. 生成 Vue Edge
     if (d.parent) {
       resultEdges.push({
         id: `e-${d.parent.data.id}-${d.data.id}`,

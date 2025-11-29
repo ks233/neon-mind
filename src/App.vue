@@ -10,11 +10,11 @@ import '@vue-flow/core/dist/style.css'
 import '@vue-flow/core/dist/theme-default.css'
 import '@vue-flow/controls/dist/style.css'
 
-import OriginNode from './components/OriginNode.vue'
-import MarkdownNode from './components/MarkdownNode.vue'
-import MindMapNode from './components/MindMapNode.vue'
+import OriginNode from '@/components/OriginNode.vue'
+import MarkdownNode from '@/components/MarkdownNode.vue'
+import MindMapNode from '@/components/MindMapNode.vue'
 
-import { useCanvasStore } from './stores/canvasStore'
+import { useCanvasStore } from '@/stores/canvasStore'
 
 import { useDark, useToggle } from '@vueuse/core'
 
@@ -164,7 +164,10 @@ function onNodeDrag(e: NodeDragEvent) {
 // 2. 拖拽结束 (OnMouseUp)
 function onNodeDragStop(e: NodeDragEvent) {
     const draggedNode = e.node
-
+    e.nodes.forEach((node) => {
+        // 同步回 Store
+        store.updateNodePosition(node.id, node.position)
+    })
     if (store.dragTargetId && store.dragIntent && draggedNode.type === 'mindmap') {
         console.log(`Moving ${draggedNode.id} -> ${store.dragTargetId} (${store.dragIntent})`)
 
@@ -172,15 +175,12 @@ function onNodeDragStop(e: NodeDragEvent) {
         store.moveMindMapNodeTo(draggedNode.id, store.dragTargetId, store.dragIntent)
     }
 
-    e.nodes.forEach((node) => {
-        // 同步回 Store
-        store.updateNodePosition(node.id, node.position)
-    })
-    store.syncModelToView()
+
 
     // 清理状态
     store.dragTargetId = null
     store.dragIntent = null
+    store.syncModelToView()
 }
 
 // 辅助：计算意图 (简单的 AABB 区域判断)
@@ -237,7 +237,7 @@ function calculateIntent(source: GraphNode, target: GraphNode): 'child' | 'above
             @node-drag-stop="onNodeDragStop"
             @nodes-change="onNodesChange"
             @edges-change="onEdgesChange"
-            snap-to-grid
+            :snap-to-grid="true"
             :snap-grid="[20, 20]">
             <Background variant="lines" :gap="20" :color="gridColor" :line-width="1" />
             <!-- <Controls /> -->

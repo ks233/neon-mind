@@ -1,6 +1,6 @@
 import { type Ref } from 'vue'
 import { onKeyStroke } from '@vueuse/core'
-import { useCanvasStore } from '../stores/canvasStore'
+import { useCanvasStore } from '@/stores/canvasStore'
 
 export function useMindMapKeyboard(
   nodeId: string, 
