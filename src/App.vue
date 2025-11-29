@@ -18,6 +18,8 @@ import { useCanvasStore } from '@/stores/canvasStore'
 
 import { useDark, useToggle } from '@vueuse/core'
 
+import { snapToGrid } from '@/utils/grid'
+
 // #region 初始化
 
 // 自定义节点
@@ -32,6 +34,8 @@ const store = useCanvasStore()
 
 // VueFlow 工具函数
 const { screenToFlowCoordinate, addEdges, updateEdge } = useVueFlow()
+
+const gridSize = ref<number>(20)
 
 // #endregion
 
@@ -66,8 +70,14 @@ function onDblClick(event: MouseEvent) {
         y: event.clientY,
     })
 
+    const rawX = x - 0 // 减去宽度一半
+    const rawY = y - 0  // 减去高度一半
+
+    const finalX = snapToGrid(rawX, gridSize.value)
+    const finalY = snapToGrid(rawY, gridSize.value)
+
     // 修正坐标中心（可选）
-    store.addMindMapRoot(x - 75, y - 20)
+    store.addMindMapRoot(finalX, finalY)
 
     // 阻止默认行为（防止选中文字等）
     event.preventDefault()
@@ -238,8 +248,8 @@ function calculateIntent(source: GraphNode, target: GraphNode): 'child' | 'above
             @nodes-change="onNodesChange"
             @edges-change="onEdgesChange"
             :snap-to-grid="true"
-            :snap-grid="[20, 20]">
-            <Background variant="lines" :gap="20" :color="gridColor" :line-width="1" />
+            :snap-grid="[gridSize, gridSize]">
+            <Background variant="dots" :gap="gridSize" :color="gridColor" :size="2" :offset="[20,20]" />
             <!-- <Controls /> -->
         </VueFlow>
     </div>
