@@ -9,7 +9,7 @@ import { computeMindMapLayout } from '../services/layoutService';
 import { createVisualNode } from '../utils/transformers';
 
 export const useCanvasStore = defineStore('canvas', () => {
-    // === 1. Model (Source of Truth / Scene Data) ===
+    // #region 全局数据
     const model = reactive<CanvasModel>({
         rootNodes: [],
         nodes: {},
@@ -23,10 +23,9 @@ export const useCanvasStore = defineStore('canvas', () => {
     // === 2. View (Render State / GameObjects) ===
     const vueNodes = ref<Node[]>([]);
     const vueEdges = ref<Edge[]>([]);
+    // #endregion
 
-
-
-
+    // #region 【数据 -> UI】刷新
     async function syncModelToView() {
         const nextNodes: Node[] = [];
         const nextEdges: Edge[] = [];
@@ -66,29 +65,21 @@ export const useCanvasStore = defineStore('canvas', () => {
         vueEdges.value = nextEdges;
     }
 
+    function updateEdgesModel(viewEdges: Edge[]) {
+        // 找出所有非生成的线（即 id 不是 e-parent-child 格式的）
+        // 或者是我们在 createVisualNode 里标记过的
+        const manualEdges = viewEdges.filter(e => !e.id.startsWith('e-'));
 
-    // 辅助：生成 Vue 节点对象
-    function createVisualNode(logic: LogicNode, computedPos?: XYPosition): Node {
-        return {
-            id: logic.id,
-            // 映射组件类型
-            type: logic.type === 'free-note' ? 'markdown' : 'mindmap',
-            position: computedPos || logic.position || { x: 0, y: 0 },
-            data: {
-                content: logic.content,
-                // 将逻辑类型传给组件，组件可能需要知道自己是不是 root
-                isRoot: logic.type === 'mind-map-root'
-            },
-            // 只有 group 内的节点才需要 parentNode，思维导图我们用 ELK 算坐标，不用 VueFlow 的 parent
-            parentNode: undefined,
-        };
+        model.edges = manualEdges.map(e => ({
+            id: e.id,
+            source: e.source,
+            target: e.target
+        }));
     }
+    //#endregion
 
-    // ==========================================================
-    // User Actions: View -> Model
-    // ==========================================================
-
-    // 1. 添加自由节点
+    // #region 【UI -> 数据】增
+    // 添加自由节点
     function addFreeNode(x: number, y: number) {
         const id = crypto.randomUUID();
         const newNode: LogicNode = {
@@ -106,7 +97,25 @@ export const useCanvasStore = defineStore('canvas', () => {
         return id;
     }
 
-    // 2. 添加思维导图子节点
+    // 添加思维导图根节点
+    function addMindMapRoot(x: number, y: number) {
+        const id = crypto.randomUUID();
+        const newNode: LogicNode = {
+            id,
+            type: 'mind-map-root',
+            content: 'Mind Map Root',
+            position: { x, y },
+            childrenIds: []
+        };
+
+        model.nodes[id] = newNode;
+        model.rootNodes.push(id);
+
+        syncModelToView();
+        return id;
+    }
+
+    // 添加思维导图子节点
     function addMindMapChild(parentId: string) {
         const parent = model.nodes[parentId];
         if (!parent) return;
@@ -128,27 +137,43 @@ export const useCanvasStore = defineStore('canvas', () => {
         syncModelToView();
     }
 
-    // 3. 更新节点位置 (仅针对 Root 或 Free 节点)
-    function updateNodePosition(id: string, position: XYPosition) {
-        const node = model.nodes[id];
-        if (!node) return;
+    // 添加思维导图同级节点
+    function addMindMapSibling(currentNodeId: string) {
+        const current = model.nodes[currentNodeId];
+        if (!current || !current.parentId) return; // 根节点没有同级
 
-        // 只有自由节点和导图根节点需要存位置
-        // 导图子节点的位置是算出来的，拖拽后通常应该弹回去，或者触发复杂的重布局
-        if (node.type === 'free-note' || node.type === 'mind-map-root') {
-            node.position = position;
-        }
-    }
+        const parent = model.nodes[current.parentId];
+        if (!parent) return;
 
-    // 4. 更新内容
-    function updateNodeContent(id: string, content: string) {
-        const node = model.nodes[id];
-        if (node) {
-            node.content = content;
-            // 如果内容变长了，可能影响布局，建议触发一次轻量级重排
-            // syncModelToView(); 
+        const newId = crypto.randomUUID();
+        const newNode: LogicNode = {
+            id: newId,
+            type: 'mind-map-node',
+            content: '新同级节点',
+            parentId: current.parentId,
+            childrenIds: []
+        };
+
+        // 更新 Model
+        model.nodes[newId] = newNode;
+
+        // [关键] 插入到当前节点位置的后面
+        const currentIndex = parent.childrenIds.indexOf(currentNodeId);
+        if (currentIndex !== -1) {
+            // splice(start, deleteCount, item)
+            parent.childrenIds.splice(currentIndex + 1, 0, newId);
+        } else {
+            parent.childrenIds.push(newId);
         }
+
+        syncModelToView();
+
+        // 返回新 ID 以便组件聚焦
+        return newId;
     }
+    //#endregion
+
+    // #region 【UI -> 数据】删
 
     // 5. 递归删除节点
     function removeNodeFromModel(id: string) {
@@ -186,73 +211,48 @@ export const useCanvasStore = defineStore('canvas', () => {
         // 如果是代码逻辑触发的，我们需要 sync
     }
 
-    // 6. 更新手动连线 (View -> Model)
-    function updateEdgesModel(viewEdges: Edge[]) {
-        // 找出所有非生成的线（即 id 不是 e-parent-child 格式的）
-        // 或者是我们在 createVisualNode 里标记过的
-        const manualEdges = viewEdges.filter(e => !e.id.startsWith('e-'));
+    //#endregion
 
-        model.edges = manualEdges.map(e => ({
-            id: e.id,
-            source: e.source,
-            target: e.target
-        }));
-    }
+    // #region 【UI -> 数据】改
 
-    // 7. 新增：添加思维导图根节点 (Entry Point)
-    function addMindMapRoot(x: number, y: number) {
-        const id = crypto.randomUUID();
-        const newNode: LogicNode = {
-            id,
-            type: 'mind-map-root',
-            content: 'Mind Map Root',
-            position: { x, y },
-            childrenIds: []
-        };
+    // 更新节点位置 (仅针对 Root 或 Free 节点)
+    function updateNodePosition(id: string, position: XYPosition) {
+        const node = model.nodes[id];
+        if (!node) return;
 
-        model.nodes[id] = newNode;
-        model.rootNodes.push(id);
-
-        syncModelToView();
-        return id;
-    }
-
-
-
-    function addMindMapSibling(currentNodeId: string) {
-        const current = model.nodes[currentNodeId];
-        if (!current || !current.parentId) return; // 根节点没有同级
-
-        const parent = model.nodes[current.parentId];
-        if (!parent) return;
-
-        const newId = crypto.randomUUID();
-        const newNode: LogicNode = {
-            id: newId,
-            type: 'mind-map-node',
-            content: '新同级节点',
-            parentId: current.parentId,
-            childrenIds: []
-        };
-
-        // 更新 Model
-        model.nodes[newId] = newNode;
-
-        // [关键] 插入到当前节点位置的后面
-        const currentIndex = parent.childrenIds.indexOf(currentNodeId);
-        if (currentIndex !== -1) {
-            // splice(start, deleteCount, item)
-            parent.childrenIds.splice(currentIndex + 1, 0, newId);
-        } else {
-            parent.childrenIds.push(newId);
+        // 只有自由节点和导图根节点需要存位置
+        // 导图子节点的位置是算出来的，拖拽后通常应该弹回去，或者触发复杂的重布局
+        if (node.type === 'free-note' || node.type === 'mind-map-root') {
+            node.position = position;
         }
-
-        syncModelToView();
-
-        // 返回新 ID 以便组件聚焦
-        return newId;
     }
 
+    function updateNodeSize(id: string, size: { width: number, height: number }) {
+        const node = model.nodes[id];
+        if (node) {
+            node.width = size.width;
+            node.height = size.height;
+
+            // [关键] 尺寸变了，思维导图的布局必须重算，否则会重叠
+            if (node.type === 'mind-map-node' || node.type === 'mind-map-root') {
+                // 使用防抖 (Debounce) 或直接调用，取决于性能要求
+                syncModelToView();
+            }
+        }
+    }
+
+    // 更新内容
+    function updateNodeContent(id: string, content: string) {
+        const node = model.nodes[id];
+        if (node) {
+            node.content = content;
+            // 如果内容变长了，可能影响布局，建议触发一次轻量级重排
+            // syncModelToView(); 
+        }
+    }
+    //#endregion
+
+    // #region 【UI -> 数据】移
     // Action: Alt + 上下箭头 调整顺序
     // offset: -1 (上移), 1 (下移)
     function moveMindMapNode(nodeId: string, offset: number) {
@@ -338,6 +338,7 @@ export const useCanvasStore = defineStore('canvas', () => {
         // 5. 触发重排
         syncModelToView();
     }
+    // #endregion
 
     // 辅助：检查 checkId 是否是 rootId 的后代
     function isDescendant(rootId: string, checkId: string): boolean {
@@ -349,21 +350,6 @@ export const useCanvasStore = defineStore('canvas', () => {
             if (isDescendant(childId, checkId)) return true;
         }
         return false;
-    }
-
-
-    function updateNodeSize(id: string, size: { width: number, height: number }) {
-        const node = model.nodes[id];
-        if (node) {
-            node.width = size.width;
-            node.height = size.height;
-
-            // [关键] 尺寸变了，思维导图的布局必须重算，否则会重叠
-            if (node.type === 'mind-map-node' || node.type === 'mind-map-root') {
-                // 使用防抖 (Debounce) 或直接调用，取决于性能要求
-                syncModelToView();
-            }
-        }
     }
 
     return {
