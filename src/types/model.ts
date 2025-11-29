@@ -11,6 +11,7 @@ export interface LogicNode {
   data?: any; // 扩展数据
   width?: number;
   height?: number;
+  fixedSize?: boolean;
 }
 
 export interface LogicEdge {

@@ -7,6 +7,7 @@ import { useVueFlow } from '@vue-flow/core';
 import { computeMindMapLayout } from '../services/layoutService';
 
 import { createVisualNode } from '../utils/transformers';
+import { useDebounceFn } from '@vueuse/core';
 
 export const useCanvasStore = defineStore('canvas', () => {
     // #region 全局数据
@@ -21,25 +22,24 @@ export const useCanvasStore = defineStore('canvas', () => {
     const dragIntent = ref<'child' | 'above' | 'below' | null>(null);
 
     // 坐标轴 UI 节点
-    const worldOriginNode : Node = {
-            id: 'world-origin',
-            type: 'origin', // 对应上面的 key
-            position: { x: 0, y: 0 },
-            data: {},
-            draggable: false, // 禁止拖拽
-            selectable: false, // 禁止选中
-            zIndex: -1,
-        };
+    const worldOriginNode: Node = {
+        id: 'world-origin',
+        type: 'origin', // 对应上面的 key
+        position: { x: 0, y: 0 },
+        data: {},
+        draggable: false, // 禁止拖拽
+        selectable: false, // 禁止选中
+        zIndex: -1,
+    };
 
-    // === 2. View (Render State / GameObjects) ===
+    // 实际显示的节点和边
     const vueNodes = ref<Node[]>([worldOriginNode]);
     const vueEdges = ref<Edge[]>([]);
+
     // #endregion
 
 
-
     // #region 【数据 -> UI】刷新
-
 
     async function syncModelToView() {
         const nextNodes: Node[] = [worldOriginNode];
@@ -79,18 +79,6 @@ export const useCanvasStore = defineStore('canvas', () => {
         vueNodes.value = nextNodes;
         vueEdges.value = nextEdges;
 
-    }
-
-    function updateEdgesModel(viewEdges: Edge[]) {
-        // 找出所有非生成的线（即 id 不是 e-parent-child 格式的）
-        // 或者是我们在 createVisualNode 里标记过的
-        const manualEdges = viewEdges.filter(e => !e.id.startsWith('e-'));
-
-        model.edges = manualEdges.map(e => ({
-            id: e.id,
-            source: e.source,
-            target: e.target
-        }));
     }
     //#endregion
 
@@ -225,6 +213,7 @@ export const useCanvasStore = defineStore('canvas', () => {
         // 触发重绘 (如果是 VueFlow 的事件回调触发的，可能不需要这步，但为了安全起见)
         // 这里的策略是：如果是 Delete 键触发的，视图已经没了，我们只改 Model
         // 如果是代码逻辑触发的，我们需要 sync
+        syncModelToView()
     }
 
     //#endregion
@@ -248,7 +237,7 @@ export const useCanvasStore = defineStore('canvas', () => {
         if (node) {
             node.width = size.width;
             node.height = size.height;
-
+            node.fixedSize = true;
             // [关键] 尺寸变了，思维导图的布局必须重算，否则会重叠
             if (node.type === 'mind-map-node' || node.type === 'mind-map-root') {
                 // 使用防抖 (Debounce) 或直接调用，取决于性能要求
@@ -266,6 +255,24 @@ export const useCanvasStore = defineStore('canvas', () => {
             // syncModelToView(); 
         }
     }
+
+    // 仅当 fixedSize = false 时调用
+    function reportAutoContentSize(id: string, size: { width: number, height: number }) {
+        const node = model.nodes[id];
+        if (node && !node.fixedSize) {
+            // 只有当尺寸真的变了才更新，避免死循环
+            if (node.width !== size.width || node.height !== size.height) {
+                node.width = size.width;
+                node.height = size.height;
+                debouncedLayout();
+            }
+        }
+    }
+
+    // 防抖的布局函数，避免打字时每帧都重排
+    const debouncedLayout = useDebounceFn(() => {
+        syncModelToView();
+    }, 300);
     //#endregion
 
     // #region 【UI -> 数据】移
@@ -356,6 +363,20 @@ export const useCanvasStore = defineStore('canvas', () => {
     }
     // #endregion
 
+    // #region 【UI -> 数据】刷新
+    function updateEdgesModel(viewEdges: Edge[]) {
+        // 找出所有非生成的线（即 id 不是 e-parent-child 格式的）
+        // 或者是我们在 createVisualNode 里标记过的
+        const manualEdges = viewEdges.filter(e => !e.id.startsWith('e-'));
+
+        model.edges = manualEdges.map(e => ({
+            id: e.id,
+            source: e.source,
+            target: e.target
+        }));
+    }
+    //#endregion
+
     // 辅助：检查 checkId 是否是 rootId 的后代
     function isDescendant(rootId: string, checkId: string): boolean {
         const root = model.nodes[rootId];
@@ -388,5 +409,6 @@ export const useCanvasStore = defineStore('canvas', () => {
         moveMindMapNode,
         moveMindMapNodeTo,
         updateNodeSize,
+        reportAutoContentSize
     };
 });

@@ -224,7 +224,7 @@ function calculateIntent(source: GraphNode, target: GraphNode): 'child' | 'above
             multi-selection-key-code="Control"
             :default-edge-options="{
                 type: 'smoothstep',
-                style: { strokeWidth: 6 },
+                style: { strokeWidth: 6, color: edgeColor },
                 interactionWidth: 50,
             }"
 
@@ -237,8 +237,7 @@ function calculateIntent(source: GraphNode, target: GraphNode): 'child' | 'above
             @node-drag-stop="onNodeDragStop"
             @nodes-change="onNodesChange"
             @edges-change="onEdgesChange"
-
-            :snap-to-grid="true"
+            snap-to-grid
             :snap-grid="[20, 20]">
             <Background variant="lines" :gap="20" :color="gridColor" :line-width="1" />
             <!-- <Controls /> -->

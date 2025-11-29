@@ -138,9 +138,10 @@ async function computeMindMapLayout(rootNode: LogicNode, allNodes: Record<string
                         id: `e-${curr.id}-${childId}`,
                         source: curr.id,
                         target: childId,
-                        type: 'smoothstep', // 直角连线
+                        type: 'smoothstep',
                         animated: false,
                         selectable: false,
+                        
                     });
                 }
             });

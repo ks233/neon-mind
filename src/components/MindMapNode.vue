@@ -1,118 +1,136 @@
 <script setup lang="ts">
-import { ref, nextTick, onMounted, toRef, computed } from 'vue'
+import { ref, nextTick, toRef, computed } from 'vue'
 import { Handle, Position, useNode, type NodeProps } from '@vue-flow/core'
+import { useResizeObserver } from '@vueuse/core'
+import { NodeResizer } from '@vue-flow/node-resizer'
+import MarkdownIt from 'markdown-it'
 import { useCanvasStore } from '../stores/canvasStore'
 import { useMindMapKeyboard } from '../composables/useMindMapShortcuts'
-
-import MarkdownIt from 'markdown-it'
-
-import { NodeResizer } from '@vue-flow/node-resizer'
 import '@vue-flow/node-resizer/dist/style.css'
 
-// 定义 Props (接收数据)
+// 定义 Props
 interface NodeData {
     content: string
-    isRoot?: boolean // 只有根节点可能是特殊的
+    isRoot?: boolean
+    fixedSize?: boolean // 标记是否已被手动调整过大小
 }
 const props = defineProps<NodeProps<NodeData>>()
 
-// 获取当前节点上下文 (GetComponent<Transform>)
 const { id } = useNode()
 const store = useCanvasStore()
-
-// 计算当前是否被高亮
-const isTarget = computed(() => store.dragTargetId === id)
-const intent = computed(() => isTarget.value ? store.dragIntent : null)
-
-// 从 props 转 ref 传给 hook
-const selectedRef = toRef(props, 'selected')
+const md = new MarkdownIt({ html: true, linkify: true, breaks: true })
 
 // === 状态管理 ===
 const isEditing = ref(false)
-const inputRef = ref<HTMLInputElement | null>(null)
-const localContent = ref(props.data.content)
 const textareaRef = ref<HTMLTextAreaElement | null>(null)
+const containerRef = ref<HTMLElement | null>(null) // 用于测量尺寸
+const localContent = ref(props.data.content)
 
-// === 注入快捷键逻辑 ===
+// 计算当前是否被高亮 (拖拽反馈)
+const isTarget = computed(() => store.dragTargetId === id)
+const intent = computed(() => isTarget.value ? store.dragIntent : null)
+
+// 计算是否固定尺寸
+const isFixedSize = computed(() => props.data.fixedSize)
+
+// 注入快捷键
+const selectedRef = toRef(props, 'selected')
 useMindMapKeyboard(id, selectedRef, isEditing)
 
-// === 渲染 Markdown ===
-const md = new MarkdownIt({ html: true, linkify: true, breaks: true })
-const renderedMarkdown = computed(() => md.render(localContent.value))
+// === 自动尺寸上报 ===
+useResizeObserver(containerRef, (entries) => {
+    const entry = entries[0]
+    const { width, height } = entry.contentRect
+
+    // 只有在"自动模式"下，才把 DOM 的尺寸反向同步给 Store (用于 ELK 排版)
+    // 加上简单的防抖判断避免微小抖动
+    if (!isFixedSize.value && width > 0 && height > 0) {
+        store.reportAutoContentSize(id, { width, height })
+    }
+})
 
 // === 交互逻辑 ===
 
-// 1. 双击进入编辑模式
+// 1. 双击进入编辑
 function onDblClick(evt: MouseEvent) {
     evt.stopPropagation()
     isEditing.value = true
-    nextTick(() => textareaRef.value?.focus())
+    nextTick(() => {
+        textareaRef.value?.focus()
+    })
 }
 
-// 2. 失去焦点或回车时保存
+// 2. 失焦保存
 function onBlur() {
     isEditing.value = false
-    // 如果内容变了，通知 Store 更新 (View -> Model)
     if (localContent.value !== props.data.content) {
         store.updateNodeContent(id, localContent.value)
-        // 只有内容变长导致尺寸变化时，才需要触发重排，这里暂时省略
-        // store.syncModelToView() 
     }
 }
 
-// 3. [核心] 调整大小结束
-// 这里的 props 类型来自 NodeResizer 的回调
+// 3. 手动调整大小结束
 function onResizeEnd(evt: any) {
-    // params: { x, y, width, height }
     const { width, height } = evt.params
-    console.log('Resize End:', width, height)
-
-    // 保存到 Model 并触发 ELK 重排
+    // 这会将 fixedSize 置为 true，切换到固定模式
     store.updateNodeSize(id, { width, height })
 }
+
+const renderedMarkdown = computed(() => md.render(localContent.value))
 </script>
 
 <template>
     <div
+        ref="containerRef"
         class="mind-map-node"
         :class="{
-            'is-root': data.isRoot, 'selected': selected,
+            'is-root': data.isRoot, 
+            'selected': selectedRef,
+            'auto-size': !isFixedSize,
+            'fixed-size': isFixedSize,
             'drag-over-child': isTarget && intent === 'child',
             'drag-over-above': isTarget && intent === 'above',
             'drag-over-below': isTarget && intent === 'below'
         }"
+        :style="isFixedSize ? { width: `${props.dimensions.width}px`, height: `${props.dimensions.height}px` } : {}"
         @dblclick="onDblClick"
         tabindex="0">
+        
         <NodeResizer
-            :is-visible="selected"
+            :is-visible="selectedRef"
             :min-width="100"
             :min-height="40"
             :snap-grid="[20, 20]"
             @resize-end="onResizeEnd" />
+
         <Handle id="left" type="target" :position="Position.Left" class="io-handle" />
         <Handle id="top" type="target" :position="Position.Top" class="io-handle" />
         <Handle id="right" type="source" :position="Position.Right" class="io-handle" />
         <Handle id="bottom" type="source" :position="Position.Bottom" class="io-handle" />
 
-        <div class="node-content">
-            <textarea
-                v-if="isEditing"
-                ref="textareaRef"
-                v-model="localContent"
-                class="markdown-editor"
-                @blur="onBlur"
-                @mousedown.stop
-                @keydown.stop></textarea>
+        <div class="content-wrapper">
+            
+            <template v-if="isEditing">
+                <div 
+                    v-if="!isFixedSize"
+                    class="ghost-text" 
+                    aria-hidden="true"
+                >{{ localContent }}<br/></div>
+
+                <textarea
+                    ref="textareaRef"
+                    v-model="localContent"
+                    class="markdown-editor"
+                    :class="{ 'absolute-fill': !isFixedSize }"
+                    @blur="onBlur"
+                    @mousedown.stop
+                    @keydown.stop></textarea>
+            </template>
+
             <div
                 v-else
                 class="markdown-body"
                 v-html="renderedMarkdown"></div>
         </div>
-
-        <Handle
-            type="source"
-            :position="Position.Right"
-            class="mind-handle" />
     </div>
 </template>
 
@@ -122,103 +140,107 @@ function onResizeEnd(evt: any) {
     border: 2px solid var(--border-color);
     border-radius: 6px;
     color: var(--text-color);
-
-    /* 关键：不再使用 fit-content */
-    /* 因为现在尺寸由 VueFlow (style.width/height) 控制 */
-    width: 100%;
-    height: 100%;
+    padding: 0;
 
     display: flex;
     flex-direction: column;
     overflow: hidden;
-    /* 防止内容溢出边框 */
-    transition: box-shadow 0.2s;
+    box-sizing: border-box;
+    transition: box-shadow 0.2s, border-color 0.2s;
+}
+
+/* === 模式 A: 自动大小 === */
+.mind-map-node.auto-size {
+    width: fit-content;
+    height: fit-content;
+    min-width: 80px;
+    max-width: 400px; /* 限制最大宽度，超过自动换行 */
+}
+
+/* === 模式 B: 固定大小 === */
+.mind-map-node.fixed-size {
+    /* 宽高由 Vue Flow style 控制，这里强制填满 */
+    width: 100%;
+    height: 100%;
+}
+
+.content-wrapper {
+    flex: 1;
+    position: relative;
+    display: grid; /* 关键：让 Ghost 和 Textarea 重叠 */
+    min-height: 24px;
+    padding: 8px 12px;
 }
 
 /* 选中状态 */
 .mind-map-node.selected {
     border-color: #1890ff;
-    /* Unity Blue */
     box-shadow: 0 0 0 2px rgba(24, 144, 255, 0.2);
 }
 
-/* 根节点特殊样式 (加粗、变大) */
+/* 根节点样式 */
 .mind-map-node.is-root {
     background: #e6f7ff;
     border-color: #91d5ff;
     font-weight: bold;
     font-size: 16px;
 }
-
 .dark .mind-map-node.is-root {
     background: #111d2c;
     border-color: #177ddc;
 }
 
 /* 编辑器样式 */
-.node-input {
-    width: 100px;
-    /* 给个最小宽度 */
-    background: transparent;
+.markdown-editor {
+    width: 100%;
+    height: 100%;
     border: none;
+    background: transparent;
     outline: none;
-    color: inherit;
-    font-size: inherit;
-    text-align: center;
+    resize: none;
+    font-family: inherit;
+    font-size: 14px;
+    line-height: 1.5;
     padding: 0;
     margin: 0;
+    overflow: hidden;
+    color: inherit;
 }
 
-/* 把 Handle 隐藏起来，或者做得非常小 */
-/* 自动布局的导图通常不需要用户手动连线 */
-.mind-handle {
-    opacity: 0;
-    /* 甚至可以直接隐藏 */
-    width: 1px;
-    height: 1px;
+/* 幽灵元素样式 (必须与 editor 一致) */
+.ghost-text {
+    visibility: hidden;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+    font-family: inherit;
+    font-size: 14px;
+    line-height: 1.5;
+    grid-area: 1 / 1 / 2 / 2; /* 占据 Grid 第一格 */
 }
 
-
-/* 拖拽反馈样式 */
-
-/* 意图：成为子节点 -> 整个边框变蓝 */
-.drag-over-child {
-    box-shadow: 0 0 0 3px #1890ff !important;
-    background-color: rgba(24, 144, 255, 0.1);
+/* 自动模式下，Textarea 绝对定位覆盖 Ghost */
+.markdown-editor.absolute-fill {
+    position: absolute;
+    top: 0;
+    left: 0;
 }
 
-/* 意图：插到上方 -> 顶部出现红线 */
-.drag-over-above {
-    border-top: 3px solid #ff4d4f !important;
+/* Markdown 预览样式 */
+.markdown-body {
+    font-size: 14px;
+    line-height: 1.5;
+    word-wrap: break-word;
 }
-
-/* 意图：插到下方 -> 底部出现红线 */
-.drag-over-below {
-    border-bottom: 3px solid #ff4d4f !important;
-}
-
-/* 编辑器填满空间 */
-.markdown-editor {
-  width: 100%;
-  height: 100%;
-  border: none;
-  background: transparent;
-  outline: none;
-  resize: none; /* 禁用原生右下角拖拽，用 NodeResizer */
-  color: inherit;
-}
-
-/* 简单的 Markdown 样式 */
-.markdown-body :deep(h1), 
+.markdown-body :deep(h1),
 .markdown-body :deep(h2) {
-  margin: 0.2em 0;
-  font-size: 1.2em;
-  border-bottom: 1px solid var(--border-color);
+    margin: 0.2em 0;
+    font-size: 1.2em;
+    border-bottom: 1px solid var(--border-color);
 }
 .markdown-body :deep(p) { margin: 0; }
 .markdown-body :deep(ul) { padding-left: 20px; margin: 0; }
 
-/* Handle 样式：平时隐藏，hover或选中时显示 */
+/* Handle 样式 */
 .io-handle {
     width: 8px;
     height: 8px;
@@ -226,21 +248,16 @@ function onResizeEnd(evt: any) {
     opacity: 0;
     transition: opacity 0.2s;
 }
-
 .mind-map-node:hover .io-handle,
 .mind-map-node.selected .io-handle {
     opacity: 1;
 }
 
-.node-content {
-    flex: 1;
-    padding: 8px 12px;
-    overflow-y: auto;
-    /* 内容太多出滚动条 */
-    font-size: 14px;
-    line-height: 1.5;
-    text-align: left;
-    /* Markdown 通常靠左 */
-    overflow: hidden;
+/* 拖拽反馈样式 */
+.drag-over-child {
+    box-shadow: 0 0 0 3px #1890ff !important;
+    background-color: rgba(24, 144, 255, 0.1);
 }
+.drag-over-above { border-top: 3px solid #ff4d4f !important; }
+.drag-over-below { border-bottom: 3px solid #ff4d4f !important; }
 </style>
