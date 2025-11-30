@@ -26,13 +26,14 @@ const nodeTypes: NodeTypesObject = {
     origin: markRaw(OriginNode as any),
     markdown: markRaw(UniversalNode),
     'mindmap': markRaw(UniversalNode),
+    'Universal': markRaw(UniversalNode),
 }
 
 // 数据单例
 const store = useCanvasStore()
 
 // VueFlow 工具函数
-const { screenToFlowCoordinate, addEdges, updateEdge } = useVueFlow()
+const { screenToFlowCoordinate, addEdges, updateEdge, getEdges } = useVueFlow()
 
 const gridSize = ref<number>(20)
 
@@ -103,9 +104,7 @@ function onNodesChange(changes: NodeChange[]) {
 }
 
 function onEdgesChange(changes: EdgeChange[]) {
-    // 这里的逻辑比较简单：直接把当前的 edges 数组全量同步给 model 即可
-    // 因为连线数据量通常不大
-    nextTick(() => store.updateEdgesModel(store.vueEdges))
+    nextTick(() => store.updateEdgesModel(getEdges.value))
 }
 
 // #endregion
@@ -127,14 +126,15 @@ function onEdgeUpdate({ edge, connection }: { edge: GraphEdge, connection: Conne
     // 并返回一个新的数组
     isUpdateSuccessful.value = true
     updateEdge(edge, connection)
+    nextTick(() => store.updateEdgesModel(getEdges.value))
 }
 
-// 4. 拖拽结束时，检查标志位
+// 拖拽到空地时删除边
 function onEdgeUpdateEnd(params: EdgeMouseEvent) {
-    // 只有在没有触发过 onEdgeUpdate 的情况下，才删除
     const { edge } = params
     if (!isUpdateSuccessful.value) {
         store.vueEdges = store.vueEdges.filter((e) => e.id !== edge.id)
+        nextTick(() => store.updateEdgesModel(getEdges.value))
     }
 
     // 重置状态（可选，为了保险）
@@ -151,14 +151,13 @@ const { getIntersectingNodes } = useVueFlow()
 function onNodeDrag(e: NodeDragEvent) {
     // 只处理单选拖拽，且拖拽的是思维导图节点
     const draggedNode = e.node
-    if (draggedNode.type !== 'mindmap') return
 
     // 获取所有与拖拽节点发生碰撞的节点
     // getIntersectingNodes 类似于 Unity Physics.OverlapBox
     const intersections = getIntersectingNodes(draggedNode)
 
     // 过滤：只关心思维导图节点，且忽略自己和自己的子孙(可选，store里有校验)
-    const targetNode = intersections.find(n => n.type === 'mindmap' && n.id !== draggedNode.id)
+    const targetNode = intersections.find(n => n.id !== draggedNode.id)
 
     if (targetNode) {
         // 更新 Store 的 UI 状态
@@ -176,16 +175,14 @@ function onNodeDragStop(e: NodeDragEvent) {
     e.nodes.forEach((node) => {
         // 同步回 Store
         store.updateNodePosition(node.id, node.position)
+        if (store.dragTargetId && store.dragIntent) {
+            console.log(`Moving ${draggedNode.id} -> ${store.dragTargetId} (${store.dragIntent})`)
+            // 调用 Store 执行逻辑
+            store.moveMindMapNodeTo(node.id, store.dragTargetId, store.dragIntent)
+        } else {
+            store.setAsRoot(node.id)
+        }
     })
-    if (store.dragTargetId && store.dragIntent && draggedNode.type === 'mindmap') {
-        console.log(`Moving ${draggedNode.id} -> ${store.dragTargetId} (${store.dragIntent})`)
-
-        // 调用 Store 执行逻辑
-        store.moveMindMapNodeTo(draggedNode.id, store.dragTargetId, store.dragIntent)
-    }
-
-
-
     // 清理状态
     store.dragTargetId = null
     store.dragIntent = null
@@ -232,7 +229,7 @@ function calculateIntent(source: GraphNode, target: GraphNode): 'child' | 'above
             multi-selection-key-code="Control"
             :default-edge-options="{
                 type: 'smoothstep',
-                style: { strokeWidth: 6, color: edgeColor },
+                style: { strokeWidth: 2, color: edgeColor },
                 interactionWidth: 50,
             }"
             :selection-mode="SelectionMode.Partial"

@@ -9,7 +9,7 @@ import '@vue-flow/node-resizer/dist/style.css'
 
 // 定义 Props
 interface NodeData {
-    content: string
+    logicNode: LogicNode
     isRoot?: boolean
     fixedSize?: boolean // 标记是否已被手动调整过大小
 }
@@ -19,8 +19,8 @@ const showDebug = ref(false)
 
 const { id } = useNode()
 const store = useCanvasStore()
-
-import ContentMarkdown from './contents/ContentMarkdown.vue'
+import { LogicNode } from '@/types/model'
+import { resolveContentComponent } from '@/utils/contentResolver'
 
 // === 状态管理 ===
 const isEditing = ref(false)
@@ -37,13 +37,9 @@ const isFixedSize = computed(() => props.data.fixedSize)
 const selectedRef = toRef(props, 'selected')
 useMindMapKeyboard(id, selectedRef, isEditing)
 
-
-// === 核心逻辑：组件分发 ===
-const ResolvedContent = computed(() => {
-    // 未来在这里写 switch/case 逻辑
-    // if (props.data.imageUrl) return ContentImage
-    return ContentMarkdown
-})
+const ContentComponent = computed(() =>
+    resolveContentComponent(props.data.logicNode.contentType)
+)
 
 // === 自动尺寸上报 ===
 useResizeObserver(containerRef, (entries) => {
@@ -65,21 +61,29 @@ function onDblClick(evt: MouseEvent) {
     isEditing.value = true
 }
 
-// 2. 失焦保存
-function onBlur() {
-    isEditing.value = false
-}
-
-function onContentUpdate(val: string) {
-    store.updateNodeContent(id, val)
-}
-
 // 3. 手动调整大小结束
 function onResizeEnd(evt: any) {
     const { width, height } = evt.params
     // 这会将 fixedSize 置为 true，切换到固定模式
     store.updateNodeSize(id, { width, height })
 }
+
+function handleUpdate(type: 'content' | 'url' | 'ratio', val: any) {
+    switch (type) {
+        case 'content':
+            store.updateNodeContent(id, val);
+            break;
+        case 'url':
+            // 这里可以触发一个异步 Action 去爬取 og:image
+            store.updateNodeLink(id, val);
+            break;
+        case 'ratio':
+            // 图片加载完成后更新比例，用于排版
+            store.updateNodeData(id, { ratio: val });
+            break;
+    }
+}
+
 </script>
 
 <template>
@@ -103,10 +107,12 @@ function onResizeEnd(evt: any) {
         @mouseleave="showDebug = false">
 
         <NodeResizer
-            :is-visible="selectedRef"
+            :is-visible="true"
             :min-width="100"
             :min-height="40"
             :snap-grid="[20, 20]"
+            line-class-name="invisible-resizer-line"
+            handle-class-name="invisible-resizer-handle"
             @resize-end="onResizeEnd" />
 
         <Handle id="left" type="target" :position="Position.Left" class="io-handle" />
@@ -116,18 +122,22 @@ function onResizeEnd(evt: any) {
 
         <div class="content-wrapper">
             <component
-                :is="ContentMarkdown"
-                :content="data.content"
+                :is="ContentComponent"
+                :data="(data.logicNode as any)"
                 :fixed-size="isFixedSize"
                 :is-editing="isEditing"
-                @update:content="onContentUpdate"
-                @blur="isEditing = false" />
+                @blur="isEditing = false"
+                @update:content="(v) => handleUpdate('content', v)"
+                @update:url="(v) => handleUpdate('url', v)"
+                @update:ratio="(v) => handleUpdate('ratio', v)" />
         </div>
-    </div>
-    <div v-show="showDebug" class="debug-info">
-        <span>({{ Math.round(position.x) }}, {{ Math.round(position.y || 0) }}) </span>
-        <span>({{ Math.round(dimensions.width) }}, {{ Math.round(dimensions.height || 0) }}) </span>
-        <span style="color: #ff4d4f">{{ id.substring(0, 8) }}</span><br>
+
+        <div v-show="showDebug" class="debug-info">
+            <span>({{ Math.round(position.x) }}, {{ Math.round(position.y || 0) }}) </span>
+            <span>({{ Math.round(dimensions.width) }}, {{ Math.round(dimensions.height || 0) }}) </span>
+            <span style="color: #ff4d4f">{{ id.substring(0, 8) }}</span><br>
+            {{ data }}
+        </div>
     </div>
 </template>
 
@@ -181,8 +191,6 @@ function onResizeEnd(evt: any) {
 .universal-node.is-root {
     background: #e6f7ff;
     border-color: #91d5ff;
-    font-weight: bold;
-    font-size: 16px;
 }
 
 .dark .universal-node.is-root {
@@ -220,6 +228,26 @@ function onResizeEnd(evt: any) {
 
 .dragging {
     opacity: 0.5;
+}
+
+/* 强制隐藏线条 */
+:deep(.invisible-resizer-line) {
+    opacity: 0 !important;
+}
+
+/* 强制隐藏手柄，但保留鼠标交互 */
+:deep(.invisible-resizer-handle) {
+    background: transparent !important;
+    border: none !important;
+    /* 关键：虽然看不见，但鼠标放上去要变光标，且能点击 */
+    /* VueFlow 默认样式已经处理了 cursor，这里只要确保它不透明度为0即可 */
+}
+
+/* 可选：当鼠标悬停在节点上时，微微显示一点手柄提示用户可以缩放？ */
+/* 如果想要纯粹的 PureRef 风格（完全看不见），下面这段可以不加 */
+.universal-node:hover :deep(.invisible-resizer-handle),
+.universal-node:hover :deep(.invisible-resizer-line) {
+    opacity: 0.1;
 }
 
 .debug-info {

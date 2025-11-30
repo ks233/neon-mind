@@ -1,18 +1,19 @@
 import { defineStore } from 'pinia';
 import { reactive, ref, toRaw } from 'vue';
-import type { CanvasModel, LogicNode, LogicEdge } from '../types/model';
-import type { Node, Edge, XYPosition } from '@vue-flow/core';
+import type { CanvasModel, LogicNode, LogicEdge, MarkdownPayload } from '../types/model';
+import type { Node, Edge, XYPosition, Connection } from '@vue-flow/core';
 import { useVueFlow } from '@vue-flow/core';
 
 import { computeMindMapLayout } from '@/services/layoutService';
 
 import { createVisualNode } from '@/utils/transformers';
 import { useDebounceFn } from '@vueuse/core';
+import { NODE_CONSTANTS } from '@/config/layoutConfig';
 
 export const useCanvasStore = defineStore('canvas', () => {
     // #region 全局数据
     const model = reactive<CanvasModel>({
-        rootNodes: [],
+        rootNodes: new Set(),
         nodes: {},
         edges: [] // 存储非树状结构的额外连线
     });
@@ -58,21 +59,13 @@ export const useCanvasStore = defineStore('canvas', () => {
         });
 
         // 2. 遍历根节点，区分处理 "自由节点" 和 "思维导图树"
+
         for (const rootId of model.rootNodes) {
             const rootNode = model.nodes[rootId];
             if (!rootNode) continue;
-
-            if (rootNode.type === 'free-note') {
-                // A. 自由节点：直接转换，不做布局
-                nextNodes.push(createVisualNode(rootNode));
-            }
-            else if (rootNode.type === 'mind-map-root') {
-                // B. 思维导图：需要整棵树一起送去计算布局
-                // 这是一个异步过程
-                const layoutData = await computeMindMapLayout(rootNode, model.nodes);
-                nextNodes.push(...layoutData.nodes);
-                nextEdges.push(...layoutData.edges);
-            }
+            const layoutData = await computeMindMapLayout(rootNode, model.nodes);
+            nextNodes.push(...layoutData.nodes);
+            nextEdges.push(...layoutData.edges);
         }
 
         // 3. 提交到显存
@@ -83,37 +76,24 @@ export const useCanvasStore = defineStore('canvas', () => {
     //#endregion
 
     // #region 【UI -> 数据】增
-    // 添加自由节点
-    function addFreeNode(x: number, y: number) {
-        const id = crypto.randomUUID();
-        const newNode: LogicNode = {
-            id,
-            type: 'free-note',
-            content: 'Free Node',
-            position: { x, y },
-            childrenIds: []
-        };
-
-        model.nodes[id] = newNode;
-        model.rootNodes.push(id);
-
-        syncModelToView();
-        return id;
-    }
 
     // 添加思维导图根节点
     function addMindMapRoot(x: number, y: number) {
         const id = crypto.randomUUID();
-        const newNode: LogicNode = {
+        const newNode: MarkdownPayload = {
             id,
-            type: 'mind-map-root',
+            structure: 'root',
+            contentType: 'markdown',
             content: 'Mind Map Root',
-            position: { x, y },
+            x,
+            y,
+            width: NODE_CONSTANTS.MIN_WIDTH,
+            height: NODE_CONSTANTS.MIN_HEIGHT,
             childrenIds: []
         };
 
         model.nodes[id] = newNode;
-        model.rootNodes.push(id);
+        model.rootNodes.add(id);
 
         syncModelToView();
         return id;
@@ -125,11 +105,16 @@ export const useCanvasStore = defineStore('canvas', () => {
         if (!parent) return;
 
         const newId = crypto.randomUUID();
-        const newNode: LogicNode = {
+        const newNode: MarkdownPayload = {
             id: newId,
-            type: 'mind-map-node', // 子节点类型
+            structure: 'node',
+            contentType: 'markdown', // 子节点类型
             content: `Child ${parent.childrenIds.length + 1}`,
             parentId: parentId,
+            x: 0,
+            y: 0,
+            width: NODE_CONSTANTS.MIN_WIDTH,
+            height: NODE_CONSTANTS.MIN_HEIGHT,
             childrenIds: []
         };
 
@@ -152,9 +137,14 @@ export const useCanvasStore = defineStore('canvas', () => {
         const newId = crypto.randomUUID();
         const newNode: LogicNode = {
             id: newId,
-            type: 'mind-map-node',
-            content: '新同级节点',
-            parentId: current.parentId,
+            structure: 'node',
+            contentType: 'markdown', // 子节点类型
+            content: `Child ${parent.childrenIds.length + 1}`,
+            parentId: parent.id,
+            x: 0,
+            y: 0,
+            width: NODE_CONSTANTS.MIN_WIDTH,
+            height: NODE_CONSTANTS.MIN_HEIGHT,
             childrenIds: []
         };
 
@@ -199,10 +189,7 @@ export const useCanvasStore = defineStore('canvas', () => {
         }
 
         // C. 处理 Root 列表引用
-        const rootIndex = model.rootNodes.indexOf(id);
-        if (rootIndex !== -1) {
-            model.rootNodes.splice(rootIndex, 1);
-        }
+        model.rootNodes.delete(id);
 
         // D. 处理游离连线引用
         model.edges = model.edges.filter(e => e.source !== id && e.target !== id);
@@ -224,12 +211,9 @@ export const useCanvasStore = defineStore('canvas', () => {
     function updateNodePosition(id: string, position: XYPosition) {
         const node = model.nodes[id];
         if (!node) return;
+        node.x = position.x;
+        node.y = position.y
 
-        // 只有自由节点和导图根节点需要存位置
-        // 导图子节点的位置是算出来的，拖拽后通常应该弹回去，或者触发复杂的重布局
-        if (node.type === 'free-note' || node.type === 'mind-map-root') {
-            node.position = position;
-        }
     }
 
     function updateNodeSize(id: string, size: { width: number, height: number }) {
@@ -238,21 +222,35 @@ export const useCanvasStore = defineStore('canvas', () => {
             node.width = size.width;
             node.height = size.height;
             node.fixedSize = true;
-            // [关键] 尺寸变了，思维导图的布局必须重算，否则会重叠
-            if (node.type === 'mind-map-node' || node.type === 'mind-map-root') {
-                // 使用防抖 (Debounce) 或直接调用，取决于性能要求
-                syncModelToView();
-            }
+            // 使用防抖 (Debounce) 或直接调用，取决于性能要求
+            syncModelToView();
         }
     }
 
     // 更新内容
     function updateNodeContent(id: string, content: string) {
-        const node = model.nodes[id];
+        const node = model.nodes[id] as MarkdownPayload;
         if (node) {
             node.content = content;
             // 如果内容变长了，可能影响布局，建议触发一次轻量级重排
             // syncModelToView(); 
+        }
+    }
+
+    async function updateNodeLink(id: string, url: string) {
+        const node = model.nodes[id];
+        if (node && node.contentType === 'link') {
+            node.url = url;
+
+            // 模拟：获取元数据 (实际开发中调用 Tauri Rust Command)
+            // 这里的逻辑通常是: 前端 -> Rust/Node -> fetch(url) -> 解析HTML -> 返回 title/image
+            node.metaTitle = 'Loading...';
+
+            setTimeout(() => {
+                node.metaTitle = 'Example Website Title';
+                node.metaDescription = 'This is a simulated description fetched from the URL.';
+                // node.metaImage = '...';
+            }, 1000);
         }
     }
 
@@ -331,16 +329,13 @@ export const useCanvasStore = defineStore('canvas', () => {
 
         // 4. === 执行移动 ===
 
-        // A. 从旧父级移除
-        if (sourceNode.parentId) {
-            const oldParent = model.nodes[sourceNode.parentId];
-            if (oldParent) {
-                oldParent.childrenIds = oldParent.childrenIds.filter(id => id !== sourceId);
-            }
+        if (newParentId) {
+            setAsChild(sourceId, newParentId)
         }
 
         // B. 设置新父级
         sourceNode.parentId = newParentId;
+
         const newParent = model.nodes[newParentId];
 
         // C. 插入到新位置
@@ -372,9 +367,60 @@ export const useCanvasStore = defineStore('canvas', () => {
         model.edges = manualEdges.map(e => ({
             id: e.id,
             source: e.source,
-            target: e.target
+            target: e.target,
+
+            sourceHandle: e.sourceHandle ?? undefined,
+            targetHandle: e.targetHandle ?? undefined,
         }));
     }
+
+    // Store Action
+    function setAsRoot(id: string) {
+        const node = model.nodes[id];
+        if (!node) return; // 1. 防御性检查：节点是否存在
+
+        // 如果已经是根节点，直接跳过（避免重复添加）
+        if (model.rootNodes.has(id)) return;
+
+        // 2. 处理旧父级关系
+        if (node.parentId) {
+            const parent = model.nodes[node.parentId];
+            if (parent) {
+                // 推荐写法：找到索引并删除
+                const index = parent.childrenIds.indexOf(id);
+                if (index !== -1) {
+                    parent.childrenIds.splice(index, 1);
+                }
+            }
+        }
+
+        // 3. 更新节点自身状态
+        // 如果你用了之前的结构重构，记得把 contentType 保持不变，只改 structure
+        node.structure = 'root';
+        node.parentId = undefined;
+
+        // 4. 更新根节点索引
+        model.rootNodes.add(id);
+
+        // 5. 触发视图更新
+        syncModelToView();
+    }
+
+    function setAsChild(id: string, parentId: string) {
+        const node = model.nodes[id];
+        const oldParentId = node.parentId
+        if (oldParentId) {
+            const oldParent = model.nodes[oldParentId]
+            const index = oldParent.childrenIds.indexOf(id);
+            if (index !== -1) {
+                oldParent.childrenIds.splice(index, 1);
+            }
+        }
+        node.parentId = parentId
+        node.structure = 'node'
+        model.rootNodes.delete(id);
+    }
+
     //#endregion
 
     // 辅助：检查 checkId 是否是 rootId 的后代
@@ -397,7 +443,6 @@ export const useCanvasStore = defineStore('canvas', () => {
         dragTargetId,
         dragIntent,
         // Actions
-        addFreeNode,
         addMindMapRoot,
         addMindMapChild,
         updateNodePosition,
@@ -409,6 +454,7 @@ export const useCanvasStore = defineStore('canvas', () => {
         moveMindMapNode,
         moveMindMapNodeTo,
         updateNodeSize,
-        reportAutoContentSize
+        reportAutoContentSize,
+        setAsRoot
     };
 });

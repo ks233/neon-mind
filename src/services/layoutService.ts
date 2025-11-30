@@ -30,6 +30,7 @@ class LayoutNode {
 export async function computeMindMapLayout(rootNode: LogicNode, allNodes: Record<string, LogicNode>) {
   // 1. 构建树 (Build Tree)
   // 将 LogicNode 转换为带有父子引用的 LayoutNode
+
   const root = buildLayoutTree(rootNode, allNodes);
 
   // 2. 测量 (Measure - Post Order)
@@ -66,19 +67,60 @@ function buildLayoutTree(logic: LogicNode, allNodes: Record<string, LogicNode>, 
 // 2. 测量阶段 (Bottom-Up)
 // ==========================================================
 function measureNodes(node: LayoutNode) {
-  // 先递归处理子节点
+// 1. 先递归处理子节点 (Post-Order)
   node.children.forEach(measureNodes);
 
-  // A. 确定自身尺寸 (应用配置的最小值和估算逻辑)
-  const contentLen = node.data.content.length;
-  // 优先用 model 里的 width，没有则估算
-  const rawWidth = node.data.width || Math.max(
-    NODE_CONSTANTS.MIN_WIDTH,
-    (contentLen * NODE_CONSTANTS.CHAR_WIDTH) + NODE_CONSTANTS.PADDING_X
-  );
-  // 优先用 model 里的 height
-  const rawHeight = node.data.height || NODE_CONSTANTS.MIN_HEIGHT;
+  const data = node.data;
+  let rawWidth = data.width || 0;
+  let rawHeight = data.height || 0;
 
+  // 2. 如果没有持久化的尺寸，根据类型进行估算
+  if (!rawWidth || !rawHeight) {
+    switch (data.contentType) {
+      case 'markdown': {
+        // [文本策略] 根据字数估算宽度，高度给默认值
+        const content = (data as any).content || ''; // 安全访问
+        const estimatedWidth = Math.max(
+          NODE_CONSTANTS.MIN_WIDTH,
+          (content.length * NODE_CONSTANTS.CHAR_WIDTH) + NODE_CONSTANTS.PADDING_X
+        );
+        
+        if (!rawWidth) rawWidth = estimatedWidth;
+        if (!rawHeight) rawHeight = NODE_CONSTANTS.MIN_HEIGHT;
+        break;
+      }
+
+      case 'image': {
+        // [图片策略] 宽度给默认值，高度根据比例反算
+        const imgData = data as any; // 或者断言为 ImagePayload
+        const defaultImageWidth = 200; // 图片默认显示宽度
+        
+        if (!rawWidth) rawWidth = defaultImageWidth;
+        
+        // 核心：如果有宽高比，根据宽度算高度
+        if (!rawHeight && imgData.ratio) {
+          rawHeight = rawWidth / imgData.ratio;
+        } else if (!rawHeight) {
+          rawHeight = 150; // 兜底高度
+        }
+        break;
+      }
+
+      case 'link': {
+        // [链接策略] 固定卡片尺寸
+        if (!rawWidth) rawWidth = 300; // 标准网页卡片宽度
+        if (!rawHeight) rawHeight = 100; // 标准高度
+        break;
+      }
+      
+      default: {
+        // 未知类型兜底
+        if (!rawWidth) rawWidth = NODE_CONSTANTS.MIN_WIDTH;
+        if (!rawHeight) rawHeight = NODE_CONSTANTS.MIN_HEIGHT;
+        break;
+      }
+    }
+  }
   // 向上取整吸附网格
   node.width = ceilToGrid(rawWidth);
   node.height = ceilToGrid(rawHeight);
@@ -152,15 +194,15 @@ function generateElements(root: LayoutNode, logicRoot: LogicNode) {
   const resultEdges: Edge[] = [];
 
   // 获取全局偏移量
-  const startX = logicRoot.position?.x || 0;
-  const startY = logicRoot.position?.y || 0;
+  const startX = logicRoot.x || 0;
+  const startY = logicRoot.y || 0;
 
   // 简单的递归遍历收集结果
   function traverse(node: LayoutNode) {
     // 现在的 node.x / node.y 已经是相对于根节点的 Top-Left 坐标了
     // 直接加上全局偏移即可，不需要烧脑的中心点换算！
     const finalX = startX + node.x;
-    const finalY = startY + node.y;
+    const finalY = ceilToGrid(startY + node.y);
 
     resultNodes.push(createVisualNode(node.data, { x: finalX, y: finalY }));
 
@@ -172,6 +214,7 @@ function generateElements(root: LayoutNode, logicRoot: LogicNode) {
         type: 'smoothstep',
         animated: false,
         style: { stroke: '#177ddc', strokeWidth: 2 },
+        updatable: false
       });
     }
 

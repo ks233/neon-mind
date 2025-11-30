@@ -12,15 +12,14 @@ export function createVisualNode(logic: LogicNode, computedPos?: XYPosition): No
 
     return {
         id: logic.id,
-        type: logic.type === 'free-note' ? 'markdown' : 'mindmap',
-        position: computedPos || logic.position || { x: 0, y: 0 },
-        data: { 
-            content: logic.content,
-            isRoot: logic.type === 'mind-map-root',
-            fixedSize: logic.fixedSize // 传递标志位给组件
+        type: 'Universal',
+        position: computedPos || { x: logic.x, y: logic.y },
+        data: {
+            isRoot: logic.structure === 'root',
+            fixedSize: logic.fixedSize || true, // 传递标志位给组件
+            logicNode: logic
         },
         // [!code focus] 应用修改后的样式逻辑
-        style: sizeStyle, 
-        parentNode: logic.type === 'group' ? logic.parentId : undefined,
+        style: sizeStyle,
     };
 }

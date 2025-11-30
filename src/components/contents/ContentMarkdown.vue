@@ -1,9 +1,10 @@
 <script setup lang="ts">
 import { ref, computed, watch, nextTick } from 'vue'
 import MarkdownIt from 'markdown-it'
+import { MarkdownPayload } from '@/types/model';
 
 const props = defineProps<{
-  content: string
+  data: MarkdownPayload
   fixedSize?: boolean
   isEditing: boolean
 }>()
@@ -14,13 +15,13 @@ const emit = defineEmits<{
 }>()
 
 const md = new MarkdownIt({ html: true, linkify: true, breaks: true })
-const localContent = ref(props.content)
+const localContent = ref(props.data.content)
 const textareaRef = ref<HTMLTextAreaElement | null>(null)
 
 // 监听外部传入的编辑状态，自动聚焦
 watch(() => props.isEditing, (val) => {
   if (val) {
-    localContent.value = props.content // 重置内容，防止脏数据
+    localContent.value = props.data.content // 重置内容，防止脏数据
     nextTick(() => textareaRef.value?.focus())
   }
 })
@@ -30,7 +31,7 @@ const renderedMarkdown = computed(() => md.render(localContent.value))
 
 function onBlur() {
   emit('blur') // 通知父组件退出编辑模式
-  if (localContent.value !== props.content) {
+  if (localContent.value !== props.data.content) {
     emit('update:content', localContent.value)
   }
 }
