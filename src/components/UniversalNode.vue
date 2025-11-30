@@ -100,7 +100,6 @@ function handleUpdate(type: 'content' | 'url' | 'ratio', val: any) {
             'drag-over-below': isTarget && intent === 'below',
             'dragging': dragging
         }"
-        :style="isFixedSize ? { width: `${props.dimensions.width}px`, height: `${props.dimensions.height}px` } : {}"
         @dblclick="onDblClick"
 
         @mouseenter="showDebug = true"
@@ -189,12 +188,12 @@ function handleUpdate(type: 'content' | 'url' | 'ratio', val: any) {
 
 /* 根节点样式 */
 .universal-node.is-root {
-    background: #e6f7ff;
-    border-color: #91d5ff;
+    /* background: #e6f7ff; */
+    /* border-color: #91d5ff; */
 }
 
 .dark .universal-node.is-root {
-    background: #111d2c;
+    /* background: #111d2c; */
     border-color: #177ddc;
 }
 

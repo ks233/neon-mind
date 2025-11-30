@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia';
 import { reactive, ref, toRaw } from 'vue';
-import type { CanvasModel, LogicNode, LogicEdge, MarkdownPayload } from '../types/model';
+import type { CanvasModel, LogicNode, LogicEdge, MarkdownPayload, ImagePayload, LinkPayload } from '../types/model';
 import type { Node, Edge, XYPosition, Connection } from '@vue-flow/core';
 import { useVueFlow } from '@vue-flow/core';
 
@@ -9,6 +9,8 @@ import { computeMindMapLayout } from '@/services/layoutService';
 import { createVisualNode } from '@/utils/transformers';
 import { useDebounceFn } from '@vueuse/core';
 import { NODE_CONSTANTS } from '@/config/layoutConfig';
+import { fetchLinkMetadata } from '@/services/linkService';
+import { convertFileSrc } from '@tauri-apps/api/core';
 
 export const useCanvasStore = defineStore('canvas', () => {
     // #region 全局数据
@@ -76,6 +78,84 @@ export const useCanvasStore = defineStore('canvas', () => {
     //#endregion
 
     // #region 【UI -> 数据】增
+
+    // [新增] 创建内容节点的通用方法 (图片/链接)
+    // 如果传入 parentId，则创建为子节点；否则创建为游离节点
+    async function addContentNode(
+        type: 'image' | 'link', 
+        data: string | File, 
+        position: { x: number, y: number },
+        parentId?: string
+    ) {
+        const id = crypto.randomUUID();
+        const baseNode = {
+            id,
+            structure: parentId ? 'node' : 'root', // 有父级就是 node，没有就是 root (游离)
+            parentId: parentId,
+            childrenIds: [],
+            x: position.x,
+            y: position.y,
+            fixedSize: false,
+        };
+
+        let payload: any;
+
+        // 1. 构造图片节点数据
+        if (type === 'image') {
+            let url = ''
+            if(data instanceof File){
+                url = URL.createObjectURL(data); // MVP: 使用 Blob URL
+            }else{
+                url = convertFileSrc(data);
+                console.log('aaa',url)
+            }
+
+            payload = {
+                ...baseNode,
+                contentType: 'image',
+                src: url,
+                ratio: 1, // 初始比例，组件加载完会更新
+                width: 200, // 默认宽
+                // height 会由 Layout 根据 ratio 算出来
+            } as ImagePayload;
+        } 
+        // 2. 构造链接节点数据
+        else if (type === 'link' && typeof data === 'string') {
+            payload = {
+                ...baseNode,
+                contentType: 'link',
+                url: data,
+                metaTitle: 'Loading...',
+                width: 300,
+                height: 100
+            } as LinkPayload;
+
+            // 异步获取元数据
+            fetchLinkMetadata(data).then(meta => {
+                updateNodeData(id, {
+                    metaTitle: meta.title,
+                    metaDescription: meta.desc,
+                    metaImage: meta.image
+                });
+            });
+        }
+
+        if (payload) {
+            model.nodes[id] = payload;
+            
+            if (parentId) {
+                // 如果是作为子节点插入
+                const parent = model.nodes[parentId];
+                if (parent) parent.childrenIds.push(id);
+            } else {
+                // 如果是作为游离节点
+                model.rootNodes.add(id);
+            }
+            
+            syncModelToView();
+        }
+    }
+
 
     // 添加思维导图根节点
     function addMindMapRoot(x: number, y: number) {
@@ -251,6 +331,25 @@ export const useCanvasStore = defineStore('canvas', () => {
                 node.metaDescription = 'This is a simulated description fetched from the URL.';
                 // node.metaImage = '...';
             }, 1000);
+        }
+    }
+
+    // 用于更新节点的任意属性 (Partial<LogicNode>)
+    function updateNodeData(id: string, data: Partial<LogicNode>) {
+        const node = model.nodes[id];
+        if (!node) return;
+
+        // 1. 合并数据到 Model
+        // Object.assign 可以将 data 中的字段覆盖到 node 上
+        Object.assign(node, data);
+
+        // 2. 判断是否需要触发重排
+        // 如果更新了 'ratio' (宽高比)，这会改变自动模式下图片的高度
+        // 因此必须触发布局计算，否则会导致图片与其他节点重叠
+        if ('ratio' in data) {
+            // 使用防抖布局，防止频繁触发
+            debouncedLayout();
+            // 如果没有 debouncedLayout，直接调 syncModelToView();
         }
     }
 
@@ -443,10 +542,13 @@ export const useCanvasStore = defineStore('canvas', () => {
         dragTargetId,
         dragIntent,
         // Actions
+        addContentNode,
         addMindMapRoot,
         addMindMapChild,
         updateNodePosition,
         updateNodeContent,
+        updateNodeLink,
+        updateNodeData,
         removeNodeFromModel,
         updateEdgesModel,
         syncModelToView,

@@ -16,7 +16,7 @@ export function createVisualNode(logic: LogicNode, computedPos?: XYPosition): No
         position: computedPos || { x: logic.x, y: logic.y },
         data: {
             isRoot: logic.structure === 'root',
-            fixedSize: logic.fixedSize || true, // 传递标志位给组件
+            fixedSize: logic.fixedSize || false, // 传递标志位给组件
             logicNode: logic
         },
         // [!code focus] 应用修改后的样式逻辑

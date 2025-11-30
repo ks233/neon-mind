@@ -18,6 +18,7 @@ import { useDark, useToggle } from '@vueuse/core'
 
 import { snapToGrid } from '@/utils/grid'
 import UniversalNode from '@/components/UniversalNode.vue'
+import { useGlobalInteractions } from './composables/useGlobalInteractions'
 
 // #region 初始化
 
@@ -28,6 +29,8 @@ const nodeTypes: NodeTypesObject = {
     'mindmap': markRaw(UniversalNode),
     'Universal': markRaw(UniversalNode),
 }
+
+useGlobalInteractions()
 
 // 数据单例
 const store = useCanvasStore()
@@ -217,8 +220,9 @@ function calculateIntent(source: GraphNode, target: GraphNode): 'child' | 'above
     <!-- <button class="theme-toggle" @click="toggleDark()">
         {{ isDark ? '🌙' : '☀️' }}
     </button> -->
-    <div style="height: 100vh; width: 100vw;">
-        <VueFlow
+    <div class="app-container"
+        @contextmenu.prevent>
+        <VueFlow v-if="true"
             v-model:nodes="store.vueNodes"
             v-model:edges="store.vueEdges"
             :node-types="nodeTypes"
@@ -260,6 +264,5 @@ function calculateIntent(source: GraphNode, target: GraphNode): 'child' | 'above
     overflow: hidden;
 
     /* 确保背景色，防止加载时闪白屏 */
-    background: #1a192b;
 }
 </style>
