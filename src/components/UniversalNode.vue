@@ -135,7 +135,7 @@ function handleUpdate(type: 'content' | 'url' | 'ratio', val: any) {
             <span>({{ Math.round(position.x) }}, {{ Math.round(position.y || 0) }}) </span>
             <span>({{ Math.round(dimensions.width) }}, {{ Math.round(dimensions.height || 0) }}) </span>
             <span style="color: #ff4d4f">{{ id.substring(0, 8) }}</span><br>
-            {{ data }}
+            <!-- {{ data }} -->
         </div>
     </div>
 </template>
@@ -199,16 +199,43 @@ function handleUpdate(type: 'content' | 'url' | 'ratio', val: any) {
 
 /* Handle 样式 */
 .io-handle {
-    width: 4px;
-    height: 4px;
+    width: 6px;
+    height: 6px;
     background: var(--handle-color);
     opacity: 0;
     transition: opacity 0.2s;
+    z-index: -1;
+}
+
+/* [核心代码] 使用伪元素扩大判定范围 */
+.io-handle::after {
+    content: '';
+    position: absolute;
+
+    /* 向四周各扩张 10px，这样点击范围就变成了 28x28px */
+    top: -10px;
+    bottom: -10px;
+    left: -10px;
+    right: -10px;
+
+    /* 调试用：如果想看到热区，可以取消下面这行的注释 */
+    /* background: rgba(255, 255, 255, 0.1); */
+
+    border-radius: 50%;
+    /* 热区也设为圆形，手感更好 */
 }
 
 .universal-node:hover .io-handle,
 .universal-node.selected .io-handle {
+    /* opacity: 1; */
+}
+
+/* 额外优化：当鼠标悬停在 Handle 的"热区"上时，让 Handle 稍微变大一点点作为反馈 */
+.io-handle:hover {
+    /* 视觉反馈 */
     opacity: 1;
+    background: #1890ff;
+    /* 激活色 */
 }
 
 /* 拖拽反馈样式 */
@@ -254,7 +281,6 @@ function handleUpdate(type: 'content' | 'url' | 'ratio', val: any) {
     /* 向上偏移，数值等于标签高度 + 间距 */
     top: -26px;
     left: 0;
-
     /* 样式美化 */
     background: rgba(0, 0, 0, 0.85);
     color: #00ff9d;
