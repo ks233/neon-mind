@@ -23,6 +23,7 @@ export const useCanvasStore = defineStore('canvas', () => {
     // UI 交互状态 (不需要持久化)
     const dragTargetId = ref<string | null>(null);
     const dragIntent = ref<'child' | 'above' | 'below' | null>(null);
+    const dragDetachId = ref<string | null>(null);
 
     // 坐标轴 UI 节点
     const worldOriginNode: Node = {
@@ -82,8 +83,8 @@ export const useCanvasStore = defineStore('canvas', () => {
     // [新增] 创建内容节点的通用方法 (图片/链接)
     // 如果传入 parentId，则创建为子节点；否则创建为游离节点
     async function addContentNode(
-        type: 'image' | 'link', 
-        data: string | File, 
+        type: 'image' | 'link',
+        data: string | File,
         position: { x: number, y: number },
         parentId?: string
     ) {
@@ -103,11 +104,11 @@ export const useCanvasStore = defineStore('canvas', () => {
         // 1. 构造图片节点数据
         if (type === 'image') {
             let url = ''
-            if(data instanceof File){
+            if (data instanceof File) {
                 url = URL.createObjectURL(data); // MVP: 使用 Blob URL
-            }else{
+            } else {
                 url = convertFileSrc(data);
-                console.log('aaa',url)
+                console.log('aaa', url)
             }
 
             payload = {
@@ -118,7 +119,7 @@ export const useCanvasStore = defineStore('canvas', () => {
                 width: 200, // 默认宽
                 // height 会由 Layout 根据 ratio 算出来
             } as ImagePayload;
-        } 
+        }
         // 2. 构造链接节点数据
         else if (type === 'link' && typeof data === 'string') {
             payload = {
@@ -142,7 +143,7 @@ export const useCanvasStore = defineStore('canvas', () => {
 
         if (payload) {
             model.nodes[id] = payload;
-            
+
             if (parentId) {
                 // 如果是作为子节点插入
                 const parent = model.nodes[parentId];
@@ -151,7 +152,7 @@ export const useCanvasStore = defineStore('canvas', () => {
                 // 如果是作为游离节点
                 model.rootNodes.add(id);
             }
-            
+
             syncModelToView();
         }
     }
@@ -541,6 +542,7 @@ export const useCanvasStore = defineStore('canvas', () => {
         vueEdges,
         dragTargetId,
         dragIntent,
+        dragDetachId,
         // Actions
         addContentNode,
         addMindMapRoot,

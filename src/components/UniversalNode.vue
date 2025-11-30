@@ -14,8 +14,8 @@ interface NodeData {
     fixedSize?: boolean // 标记是否已被手动调整过大小
 }
 const props = defineProps<NodeProps<NodeData>>()
-
 const showDebug = ref(false)
+const isDetaching = computed(() => store.dragDetachId === id && store.dragIntent === null)
 
 const { id } = useNode()
 const store = useCanvasStore()
@@ -98,7 +98,8 @@ function handleUpdate(type: 'content' | 'url' | 'ratio', val: any) {
             'drag-over-child': isTarget && intent === 'child',
             'drag-over-above': isTarget && intent === 'above',
             'drag-over-below': isTarget && intent === 'below',
-            'dragging': dragging
+            'dragging': dragging,
+            'is-detaching': isDetaching // [!code focus]
         }"
         @dblclick="onDblClick"
 
@@ -171,6 +172,16 @@ function handleUpdate(type: 'content' | 'url' | 'ratio', val: any) {
     height: 100%;
 }
 
+.universal-node.dragging {
+    opacity: 0.8;
+}
+
+.universal-node.is-detaching {
+    border-color: #18ffcd !important;
+    /* border-style: dashed !important; */
+    /* box-shadow: 0 0 10px #ff4d4f !important; */
+}
+
 .content-wrapper {
     flex: 1;
     position: relative;
@@ -183,7 +194,7 @@ function handleUpdate(type: 'content' | 'url' | 'ratio', val: any) {
 /* 选中状态 */
 .universal-node.selected {
     border-color: #1890ff;
-    box-shadow: 0 0 0 2px rgba(24, 144, 255, 0.2);
+    box-shadow: 0 0 0 5px rgba(24, 144, 255, 0.2);
 }
 
 /* 根节点样式 */
@@ -250,10 +261,6 @@ function handleUpdate(type: 'content' | 'url' | 'ratio', val: any) {
 
 .drag-over-below {
     border-bottom: 3px solid #ff4d4f !important;
-}
-
-.dragging {
-    opacity: 0.5;
 }
 
 /* 强制隐藏线条 */

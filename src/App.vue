@@ -39,7 +39,7 @@ const store = useCanvasStore()
 const { screenToFlowCoordinate, addEdges, updateEdge, getEdges } = useVueFlow()
 
 const gridSize = ref<number>(20)
-
+const DETACH_DISTANCE = 60;
 // #endregion
 
 // #region 深色模式
@@ -148,12 +148,21 @@ function onEdgeUpdateEnd(params: EdgeMouseEvent) {
 
 // #region 拖拽改变导图层级
 
-const { getIntersectingNodes } = useVueFlow()
+const { getIntersectingNodes, findNode } = useVueFlow()
+
+const dragStartPos = ref({ x: 0, y: 0 })
+
+function onNodeDragStart(e: NodeDragEvent) {
+    dragStartPos.value = { x: e.node.position.x, y: e.node.position.y }
+}
 
 // 1. 拖拽中 (Update Loop)
 function onNodeDrag(e: NodeDragEvent) {
     // 只处理单选拖拽，且拖拽的是思维导图节点
     const draggedNode = e.node
+    const draggedId = draggedNode.id
+
+    const logicNode = store.model.nodes[draggedId]
 
     // 获取所有与拖拽节点发生碰撞的节点
     // getIntersectingNodes 类似于 Unity Physics.OverlapBox
@@ -166,10 +175,26 @@ function onNodeDrag(e: NodeDragEvent) {
         // 更新 Store 的 UI 状态
         store.dragTargetId = targetNode.id
         store.dragIntent = calculateIntent(draggedNode, targetNode)
+        store.dragDetachId = null
     } else {
         store.dragTargetId = null
         store.dragIntent = null
     }
+    const parentNode = findNode(logicNode.parentId)
+    if (parentNode) {
+        const dx = draggedNode.position.x - dragStartPos.value.x
+        const dy = draggedNode.position.y - dragStartPos.value.y
+        // 欧几里得距离
+        const distance = Math.sqrt(dx * dx + dy * dy)
+
+        // 3. 判断阈值
+        if (distance > DETACH_DISTANCE) {
+            store.dragDetachId = draggedId
+        } else {
+            store.dragDetachId = null
+        }
+    }
+
 }
 
 // 2. 拖拽结束 (OnMouseUp)
@@ -182,13 +207,16 @@ function onNodeDragStop(e: NodeDragEvent) {
             console.log(`Moving ${draggedNode.id} -> ${store.dragTargetId} (${store.dragIntent})`)
             // 调用 Store 执行逻辑
             store.moveMindMapNodeTo(node.id, store.dragTargetId, store.dragIntent)
-        } else {
+        } else if (store.dragDetachId === node.id) {
             store.setAsRoot(node.id)
         }
     })
     // 清理状态
     store.dragTargetId = null
     store.dragIntent = null
+    store.dragDetachId = null
+    dragStartPos.value = { x: 0, y: 0 }
+
     store.syncModelToView()
 }
 
@@ -242,6 +270,7 @@ function calculateIntent(source: GraphNode, target: GraphNode): 'child' | 'above
             @edge-update="onEdgeUpdate"
             @edge-update-end="onEdgeUpdateEnd"
 
+            @node-drag-start="onNodeDragStart"
             @node-drag="onNodeDrag"
             @node-drag-stop="onNodeDragStop"
             @nodes-change="onNodesChange"
