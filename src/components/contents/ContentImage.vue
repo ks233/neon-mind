@@ -1,168 +1,70 @@
 <script setup lang="ts">
-import { ref, watch, nextTick } from 'vue'
-import type { LinkPayload } from '@/types/model'
+import { ref } from 'vue'
+import type { ImagePayload } from '@/types/model'
 
+// 1. 接收具体类型的 Payload
 const props = defineProps<{
-    data: LinkPayload
+    data: ImagePayload
     fixedSize?: boolean
     isEditing: boolean
 }>()
 
 const emit = defineEmits<{
-    (e: 'update:url', url: string): void
-    (e: 'blur'): void
+    (e: 'update:ratio', ratio: number): void
 }>()
 
-const localUrl = ref(props.data.url)
-const inputRef = ref<HTMLInputElement | null>(null)
+const imgRef = ref<HTMLImageElement | null>(null)
 
-// 监听编辑状态
-watch(() => props.isEditing, (val) => {
-    if (val) {
-        localUrl.value = props.data.url
-        nextTick(() => inputRef.value?.focus())
-    }
-})
-
-function onBlur() {
-    emit('blur')
-    if (localUrl.value !== props.data.url) {
-        emit('update:url', localUrl.value)
+// 2. 图片加载完成后计算原始比例
+function onImageLoad() {
+    if (imgRef.value) {
+        const { naturalWidth, naturalHeight } = imgRef.value
+        if (naturalHeight > 0) {
+            const ratio = naturalWidth / naturalHeight
+            // 如果当前比例和记录的不一致，上报更新 (用于 Layout 计算)
+            if (Math.abs(ratio - (props.data.ratio || 0)) > 0.01) {
+                emit('update:ratio', ratio)
+            }
+        }
     }
 }
-
-function openLink() {
-    if (!props.isEditing) {
-        window.open(props.data.url, '_blank')
-    }
-}
-
-// 简单的 Favicon 获取 trick
-const faviconUrl = `https://www.google.com/s2/favicons?domain=${props.data.url}&sz=32`
 </script>
 
 <template>
-    <div class="link-wrapper">
+    <div class="image-content">
+        <img
+            ref="imgRef"
+            :src="data.src"
+            :style="{
+                objectFit: data.fit || 'cover',
+                // 如果是固定大小，图片填满容器；如果是自动大小，由容器限制
+                width: '100%',
+                height: '100%'
+            }"
+            draggable="false"
+            @load="onImageLoad" />
 
-        <div v-if="isEditing" class="url-editor">
-            <input
-                ref="inputRef"
-                v-model="localUrl"
-                class="nodrag"
-                placeholder="Paste URL here..."
-                @blur="onBlur"
-                @keydown.enter="onBlur"
-                @mousedown.stop />
-        </div>
-
-        <div
-            v-else
-            class="link-card"
-            @dblclick.stop="openLink">
-            <div v-if="data.metaImage" class="link-cover">
-                <img :src="data.metaImage" draggable="false" />
-            </div>
-
-            <div class="link-info">
-                <div class="link-title">{{ data.metaTitle || data.url }}</div>
-                <div v-if="data.metaDescription" class="link-desc">
-                    {{ data.metaDescription }}
-                </div>
-
-                <div class="link-footer">
-                    <img :src="faviconUrl" class="favicon" />
-                    <span class="hostname">{{ new URL(data.url).hostname }}</span>
-                </div>
-            </div>
+        <div v-if="!data.src" class="image-placeholder">
+            No Image
         </div>
     </div>
 </template>
 
 <style scoped>
-.link-wrapper {
+.image-content {
     width: 100%;
     height: 100%;
-    min-width: 200px;
-    /* 卡片最小宽度 */
-}
-
-.url-editor input {
-    width: 100%;
-    padding: 8px;
-    background: var(--node-bg);
-    border: 1px solid #1890ff;
-    color: var(--text-color);
-    border-radius: 4px;
-}
-
-.link-card {
-    display: flex;
-    flex-direction: column;
-    height: 100%;
-    background: var(--node-bg);
-    /* 稍微深一点的背景区分 */
-    background-color: rgba(128, 128, 128, 0.05);
-    border-radius: 4px;
     overflow: hidden;
-    cursor: pointer;
-    transition: background 0.2s;
-}
-
-.link-card:hover {
-    background-color: rgba(128, 128, 128, 0.1);
-}
-
-.link-cover {
-    height: 120px;
-    /* 固定封面高度 */
-    overflow: hidden;
-    flex-shrink: 0;
-}
-
-.link-cover img {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-}
-
-.link-info {
-    padding: 10px;
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-    flex: 1;
-}
-
-.link-title {
-    font-weight: 600;
-    font-size: 14px;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-}
-
-.link-desc {
-    font-size: 12px;
-    color: #888;
-    /* 限制显示两行 */
-    display: -webkit-box;
-    -webkit-line-clamp: 2;
-    -webkit-box-orient: vertical;
-    overflow: hidden;
-}
-
-.link-footer {
-    margin-top: auto;
-    /* 推到底部 */
     display: flex;
     align-items: center;
-    gap: 6px;
-    font-size: 11px;
-    color: #aaa;
+    justify-content: center;
+    border-radius: 4px;
+    /*稍微一点圆角*/
 }
 
-.favicon {
-    width: 14px;
-    height: 14px;
+img {
+    display: block;
+    pointer-events: none;
+    /* 让鼠标事件穿透给父级，方便拖拽节点 */
 }
 </style>
