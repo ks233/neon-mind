@@ -10,6 +10,7 @@ import { useDebounceFn } from '@vueuse/core';
 import { NODE_CONSTANTS } from '@/config/layoutConfig';
 import { fetchLinkMetadata } from '@/services/linkService';
 import { convertFileSrc } from '@tauri-apps/api/core';
+import { ProjectService } from '@/services/projectService';
 
 export const useCanvasStore = defineStore('canvas', () => {
     // #region 全局数据
@@ -223,7 +224,7 @@ export const useCanvasStore = defineStore('canvas', () => {
         selectNode(newId)
     }
 
-    async function addMindMapChildBatch(parentIds: string[]) : Promise<string[]> {
+    async function addMindMapChildBatch(parentIds: string[]): Promise<string[]> {
         if (parentIds.length === 0) return [];
 
         const newIds: string[] = [];
@@ -578,6 +579,33 @@ export const useCanvasStore = defineStore('canvas', () => {
 
     //#endregion
 
+    //#region 数据持久化
+    async function saveToFile() {
+        await ProjectService.saveProject(model);
+    }
+
+    async function loadFromFile() {
+        const loadedModel = await ProjectService.openProject();
+        if (loadedModel) {
+            // [核心] 全量替换当前数据
+            // 因为 model 是 reactive，不能直接 model = loadedModel
+            // 需要逐个属性覆盖，或者清空后赋值
+
+            model.rootNodes.clear();
+            Object.keys(model.nodes).forEach(k => delete model.nodes[k]);
+            model.edges = [];
+
+            // 恢复数据
+            Object.assign(model.nodes, loadedModel.nodes);
+            loadedModel.rootNodes.forEach(id => model.rootNodes.add(id));
+            model.edges = loadedModel.edges;
+
+            // 触发渲染
+            await syncModelToView();
+        }
+    }
+    //#endregion
+
     // 辅助：检查 checkId 是否是 rootId 的后代
     function isDescendant(rootId: string, checkId: string): boolean {
         const root = model.nodes[rootId];
@@ -615,6 +643,9 @@ export const useCanvasStore = defineStore('canvas', () => {
         moveMindMapNodeTo,
         updateNodeSize,
         reportAutoContentSize,
-        setAsRoot
+        setAsRoot,
+        // 数据持久化
+        saveToFile,
+        loadFromFile
     };
 });

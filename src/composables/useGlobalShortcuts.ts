@@ -51,13 +51,21 @@ export function useGlobalShortcuts() {
         }
     });
 
-    // // 1. 保存 (Ctrl + S)
-    // onKeyStroke('s', (e) => {
-    //     if (e.ctrlKey || e.metaKey) {
-    //         e.preventDefault()
-    //         // store.saveProject()
-    //     }
-    // })
+    // Ctrl + S
+    onKeyStroke('s', (e) => {
+        if (e.ctrlKey || e.metaKey) {
+            e.preventDefault();
+            store.saveToFile();
+        }
+    });
+
+    // Ctrl + O (Open)
+    onKeyStroke('o', (e) => {
+        if (e.ctrlKey || e.metaKey) {
+            e.preventDefault();
+            store.loadFromFile();
+        }
+    });
 
     // // 2. 撤销/重做 (Ctrl + Z / Ctrl + Y)
     // onKeyStroke('z', (e) => {

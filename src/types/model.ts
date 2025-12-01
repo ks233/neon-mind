@@ -69,3 +69,13 @@ export interface CanvasModel {
   nodes: Record<string, LogicNode>; // 实体池
   edges: LogicEdge[]; // 游离连线 (非导图层级线)
 }
+
+export interface CanvasFile {
+  version: number; // [关键] 版本号
+  meta: {
+    appName: "MindCanvas",
+    createdAt: number,
+    updatedAt: number,
+  };
+  model: CanvasModel; // 你的核心数据
+}
