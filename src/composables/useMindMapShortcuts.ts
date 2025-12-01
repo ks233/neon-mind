@@ -9,38 +9,6 @@ export function useMindMapKeyboard(
 ) {
   const store = useCanvasStore()
 
-  // [!code focus] 移除 target 选项，监听全局键盘事件
-  // const options = { target: containerRef } 
-
-  // 1. Tab: 创建子节点
-//   onKeyStroke('Tab', (e) => {
-//     // [!code focus:4] 核心修正：只在节点被选中时触发
-//     if (!selected.value) return 
-//     if (isEditing.value) {
-//         console.log('dnd')
-//         return
-//     }
-//     e.preventDefault()
-//     store.addMindMapChild(nodeId)
-//   })
-
-  // 2. Enter: 创建同级节点
-  onKeyStroke('Enter', (e) => {
-    if (!selected.value) return // [!code focus]
-    if (e.shiftKey) return
-
-    e.preventDefault()
-
-    if (isEditing.value) {
-        // 编辑模式逻辑：保存并创建
-        isEditing.value = false 
-        setTimeout(() => store.addMindMapSibling(nodeId), 0)
-    } else {
-        // 选中模式逻辑：直接创建
-        store.addMindMapSibling(nodeId)
-    }
-  })
-
   // 3. Alt + Arrows: 调整顺序
   onKeyStroke(['ArrowUp', 'ArrowDown'], (e) => {
     if (!selected.value) return // [!code focus]

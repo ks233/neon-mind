@@ -13,14 +13,10 @@ export function useGlobalShortcuts() {
 
     // [!code focus:15] 全局处理 Tab 键
     onKeyStroke('Tab', async (e) => {
+        e.preventDefault();
         // 如果正在编辑文本，不要拦截 (由 ContentMarkdown 内部 stop 阻止冒泡)
         if (isInputActive()) return;
-
-        e.preventDefault();
-
         const selectedNodes = getSelectedNodes.value;
-
-
         if (selectedNodes.length === 0) return;
 
         // 筛选出思维导图节点 (游离节点按 Tab 可能不产生子节点，看你需求)
@@ -47,6 +43,33 @@ export function useGlobalShortcuts() {
                     .filter((n): n is GraphNode => typeof n !== 'undefined'); // 过滤掉潜在的 undefined
 
                 // 批量选中
+                addSelectedNodes(newGraphNodes);
+            }
+        }
+    });
+
+    onKeyStroke('Enter', async (e) => {
+        e.preventDefault();
+        // 如果正在编辑文本，不要拦截 (由 ContentMarkdown 内部 stop 阻止冒泡)
+        if (isInputActive()) return;
+        const selectedNodes = getSelectedNodes.value;
+
+        if (selectedNodes.length === 0) return;
+        const targetIds = selectedNodes
+            .map(n => n.id);
+
+        if (targetIds.length > 0) {
+
+            console.time('Batch Add Sibling');
+            const newIds = await store.addMindMapSiblingBatch(targetIds);
+            console.timeEnd('Batch Add Sibling');
+
+            if (newIds.length > 0) {
+                await nextTick();
+                removeSelectedNodes(selectedNodes);
+                const newGraphNodes = newIds
+                    .map(id => findNode(id))
+                    .filter((n): n is GraphNode => typeof n !== 'undefined'); // 过滤掉潜在的 undefined
                 addSelectedNodes(newGraphNodes);
             }
         }

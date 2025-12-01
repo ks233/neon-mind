@@ -288,14 +288,53 @@ export const useCanvasStore = defineStore('canvas', () => {
         });
         // 2. [关键] 只触发一次视图同步和排版
         await syncModelToView();
-
-        console.log('before', getSelectedNodes.value)
-        // 3. (可选) 选中所有新生成的节点？或者保持原样
-        // 选中逻辑也可以批量化，这里暂时略过        
-        console.log(getSelectedNodes.value)
-        removeSelectedNodes(getSelectedNodes.value)
         return newIds
         // addSelectedNodes(nodesToSelect.map(id => findNode(id) as GraphNode))
+    }
+
+    async function addMindMapSiblingBatch(currentNodeIds: string[]) {
+        
+        const newIds: string[] = [];
+        currentNodeIds.forEach(currentNodeId => {
+            const current = model.nodes[currentNodeId];
+            if (!current || !current.parentId) return; // 根节点没有同级
+
+            const parent = model.nodes[current.parentId];
+            if (!parent) return;
+
+            const newId = crypto.randomUUID();
+            const newNode: LogicNode = {
+                id: newId,
+                structure: 'node',
+                contentType: 'markdown', // 子节点类型
+                content: `Child ${parent.childrenIds.length + 1}`,
+                parentId: parent.id,
+                x: 0,
+                y: 0,
+                fixedSize: false,
+                width: NODE_CONSTANTS.MIN_WIDTH,
+                height: NODE_CONSTANTS.MIN_HEIGHT,
+                childrenIds: []
+            };
+
+            // 更新 Model
+            model.nodes[newId] = newNode;
+
+            // [关键] 插入到当前节点位置的后面
+            const currentIndex = parent.childrenIds.indexOf(currentNodeId);
+            if (currentIndex !== -1) {
+                // splice(start, deleteCount, item)
+                parent.childrenIds.splice(currentIndex + 1, 0, newId);
+            } else {
+                parent.childrenIds.push(newId);
+            }
+            newIds.push(newId)
+        })
+        
+        await syncModelToView();
+
+        // 返回新 ID 以便组件聚焦
+        return newIds;
     }
 
     // 添加思维导图同级节点
@@ -704,6 +743,7 @@ export const useCanvasStore = defineStore('canvas', () => {
         updateEdgeLabel,
         syncModelToView,
         addMindMapSibling,
+        addMindMapSiblingBatch,
         moveMindMapNode,
         moveMindMapNodeTo,
         updateNodeSize,
