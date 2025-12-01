@@ -1,6 +1,6 @@
 // src/utils/transformers.ts
 import type { LogicNode } from '@/types/model';
-import type { Node, XYPosition } from '@vue-flow/core';
+import type { Node, XYPosition} from '@vue-flow/core';
 
 /**
  * 纯函数：将 LogicNode 转换为 Vue Flow Node

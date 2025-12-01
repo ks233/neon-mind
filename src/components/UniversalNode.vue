@@ -21,6 +21,7 @@ const { id } = useNode()
 const store = useCanvasStore()
 import { LogicNode } from '@/types/model'
 import { resolveContentComponent } from '@/utils/contentResolver'
+import { snapToGrid } from '@/utils/grid'
 
 // === 状态管理 ===
 const isEditing = ref(false)
@@ -63,9 +64,8 @@ function onDblClick(evt: MouseEvent) {
 
 // 3. 手动调整大小结束
 function onResizeEnd(evt: any) {
-    const { width, height } = evt.params
     // 这会将 fixedSize 置为 true，切换到固定模式
-    store.updateNodeSize(id, { width, height })
+    onResize(evt)
 }
 
 function handleUpdate(type: 'content' | 'url' | 'ratio', val: any) {
@@ -82,6 +82,30 @@ function handleUpdate(type: 'content' | 'url' | 'ratio', val: any) {
             store.updateNodeData(id, { ratio: val });
             break;
     }
+}
+
+function onResize(evt: any) {
+    // evt.params 包含: { x, y, width, height }
+    // 注意：x, y 是该节点当前的绝对坐标
+    const { x, y, width, height } = evt.params
+
+    // 1. 计算右边缘和下边缘的绝对世界坐标
+    // (我们假设用户主要拖拽右下角，如果是左上角拖拽，逻辑会更复杂，需要修正 x/y)
+    const absoluteRight = x + width
+    const absoluteBottom = y + height
+
+    // 2. 对边缘坐标进行全局网格吸附
+    const snappedRight = snapToGrid(absoluteRight)
+    const snappedBottom = snapToGrid(absoluteBottom)
+
+    // 3. 反推回宽度和高度
+    // 新宽 = 吸附后的右边 - 当前的左边
+    const finalWidth = Math.max(100, snappedRight - x) // 100 是最小宽度
+    const finalHeight = Math.max(40, snappedBottom - y)
+
+    // 4. 实时更新 Store (这会让界面实时看到吸附效果)
+    // 注意：这里更新的是 model.width/height，createVisualNode 会把它应用到 style 上
+    store.updateNodeSize(id, { width: finalWidth, height: finalHeight })
 }
 
 </script>
@@ -113,6 +137,7 @@ function handleUpdate(type: 'content' | 'url' | 'ratio', val: any) {
             :snap-grid="[20, 20]"
             line-class-name="invisible-resizer-line"
             handle-class-name="invisible-resizer-handle"
+            @resize="onResize"
             @resize-end="onResizeEnd" />
 
         <Handle id="left" type="target" :position="Position.Left" class="io-handle" />
@@ -161,6 +186,7 @@ function handleUpdate(type: 'content' | 'url' | 'ratio', val: any) {
     width: fit-content;
     height: fit-content;
     min-width: 80px;
+    min-height: 40px;
     max-width: 400px;
     /* 限制最大宽度，超过自动换行 */
 }
@@ -187,7 +213,7 @@ function handleUpdate(type: 'content' | 'url' | 'ratio', val: any) {
     position: relative;
     display: grid;
     min-height: 24px;
-    padding: 6px;
+    padding: 2px 8px;
     overflow: hidden;
 }
 
@@ -255,11 +281,25 @@ function handleUpdate(type: 'content' | 'url' | 'ratio', val: any) {
     background-color: rgba(24, 144, 255, 0.1);
 }
 
-.drag-over-above {
+.universal-node::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  pointer-events: none; /* 鼠标穿透 */
+  border: 0 solid transparent; /* 默认无边框 */
+  transition: border-color 0.1s;
+  z-index: 100;
+  border-radius: inherit; /* 跟随圆角 */
+}
+
+.drag-over-above::after {
     border-top: 3px solid #ff4d4f !important;
 }
 
-.drag-over-below {
+.drag-over-below::after {
     border-bottom: 3px solid #ff4d4f !important;
 }
 

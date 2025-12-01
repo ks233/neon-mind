@@ -13,13 +13,16 @@ export function useMindMapKeyboard(
   // const options = { target: containerRef } 
 
   // 1. Tab: 创建子节点
-  onKeyStroke('Tab', (e) => {
-    // [!code focus:4] 核心修正：只在节点被选中时触发
-    if (!selected.value) return 
-    
-    e.preventDefault()
-    store.addMindMapChild(nodeId)
-  })
+//   onKeyStroke('Tab', (e) => {
+//     // [!code focus:4] 核心修正：只在节点被选中时触发
+//     if (!selected.value) return 
+//     if (isEditing.value) {
+//         console.log('dnd')
+//         return
+//     }
+//     e.preventDefault()
+//     store.addMindMapChild(nodeId)
+//   })
 
   // 2. Enter: 创建同级节点
   onKeyStroke('Enter', (e) => {

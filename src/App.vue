@@ -19,6 +19,7 @@ import { useDark, useToggle } from '@vueuse/core'
 import { snapToGrid } from '@/utils/grid'
 import UniversalNode from '@/components/UniversalNode.vue'
 import { useGlobalInteractions } from './composables/useGlobalInteractions'
+import { useGlobalShortcuts } from './composables/useGlobalShortcuts'
 
 // #region 初始化
 
@@ -31,6 +32,8 @@ const nodeTypes: NodeTypesObject = {
 }
 
 useGlobalInteractions()
+
+useGlobalShortcuts()
 
 // 数据单例
 const store = useCanvasStore()
@@ -155,7 +158,6 @@ const dragStartPos = ref({ x: 0, y: 0 })
 function onNodeDragStart(e: NodeDragEvent) {
     dragStartPos.value = { x: e.node.position.x, y: e.node.position.y }
 }
-
 // 1. 拖拽中 (Update Loop)
 function onNodeDrag(e: NodeDragEvent) {
     // 只处理单选拖拽，且拖拽的是思维导图节点
@@ -255,8 +257,11 @@ function calculateIntent(source: GraphNode, target: GraphNode): 'child' | 'above
             v-model:edges="store.vueEdges"
             :node-types="nodeTypes"
             @dblclick="onDblClick"
-            :zoom-on-double-click="false" fit-view-on-init @connect="onConnect"
-            :delete-key-code="['Delete', 'Backspace']" :pan-on-drag="[1, 2]"
+            :zoom-on-double-click="false"
+            fit-view-on-init
+            @connect="onConnect"
+            :delete-key-code="['Delete']"
+            :pan-on-drag="[1, 2]"
             :selection-key-code="true"
             multi-selection-key-code="Control"
             :default-edge-options="{
@@ -275,11 +280,23 @@ function calculateIntent(source: GraphNode, target: GraphNode): 'child' | 'above
             @node-drag-stop="onNodeDragStop"
             @nodes-change="onNodesChange"
             @edges-change="onEdgesChange"
+            :only-render-visible-elements="false"
             :snap-to-grid="true"
             :snap-grid="[gridSize, gridSize]">
             <Background variant="dots" :gap="gridSize" :color="gridColor" :size="2" :offset="[20, 20]" />
             <!-- <Controls /> -->
         </VueFlow>
+
+        <div class="debug-panel">
+            <div class="debug-row">
+                <span class="label">Nodes:</span>
+                <span class="value">{{ store.vueNodes.length }}</span>
+            </div>
+            <div class="debug-row">
+                <span class="label">Edges:</span>
+                <span class="value">{{ store.vueEdges.length }}</span>
+            </div>
+        </div>
     </div>
 </template>
 
@@ -293,5 +310,48 @@ function calculateIntent(source: GraphNode, target: GraphNode): 'child' | 'above
     overflow: hidden;
 
     /* 确保背景色，防止加载时闪白屏 */
+}
+
+.debug-panel {
+    position: absolute;
+    bottom: 10px;
+    left: 10px;
+    z-index: 10000;
+    /* 确保在最上层 */
+
+    background: rgba(0, 0, 0, 0.7);
+    /* 半透明黑底 */
+    color: #00ff00;
+    /* 黑客绿，显眼 */
+
+    padding: 8px 12px;
+    border-radius: 6px;
+    font-family: 'Consolas', 'Monaco', monospace;
+    /* 等宽字体 */
+    font-size: 12px;
+    line-height: 1.5;
+
+    /* 关键：鼠标穿透 */
+    /* 防止挡住画布的左下角操作，让鼠标可以直接穿过去拖拽画布 */
+    pointer-events: none;
+
+    /* 防止文本换行 */
+    white-space: nowrap;
+    backdrop-filter: blur(4px);
+    /* 毛玻璃效果 (可选) */
+}
+
+.debug-row {
+    display: flex;
+    justify-content: space-between;
+    gap: 10px;
+}
+
+.label {
+    opacity: 0.7;
+}
+
+.value {
+    font-weight: bold;
 }
 </style>

@@ -1,12 +1,11 @@
 import { defineStore } from 'pinia';
-import { reactive, ref, toRaw } from 'vue';
+import { nextTick, reactive, ref, shallowRef, toRaw } from 'vue';
 import type { CanvasModel, LogicNode, LogicEdge, MarkdownPayload, ImagePayload, LinkPayload } from '../types/model';
-import type { Node, Edge, XYPosition, Connection } from '@vue-flow/core';
+import type { Node, Edge, XYPosition, Connection, GraphNode } from '@vue-flow/core';
 import { useVueFlow } from '@vue-flow/core';
 
 import { computeMindMapLayout } from '@/services/layoutService';
 
-import { createVisualNode } from '@/utils/transformers';
 import { useDebounceFn } from '@vueuse/core';
 import { NODE_CONSTANTS } from '@/config/layoutConfig';
 import { fetchLinkMetadata } from '@/services/linkService';
@@ -19,6 +18,20 @@ export const useCanvasStore = defineStore('canvas', () => {
         nodes: {},
         edges: [] // 存储非树状结构的额外连线
     });
+    const {
+        addSelectedNodes,
+        removeSelectedNodes,
+        getSelectedNodes, findNode
+    } = useVueFlow();
+    function selectNode(id: string) {
+        vueNodes.value.forEach(node => {
+            if (node.id === id) {
+                (node as GraphNode).selected = true; // 标记为选中
+            } else {
+                // node.selected = false; // 其他取消选中
+            }
+        });
+    }
 
     // UI 交互状态 (不需要持久化)
     const dragTargetId = ref<string | null>(null);
@@ -37,8 +50,8 @@ export const useCanvasStore = defineStore('canvas', () => {
     };
 
     // 实际显示的节点和边
-    const vueNodes = ref<Node[]>([worldOriginNode]);
-    const vueEdges = ref<Edge[]>([]);
+    const vueNodes = shallowRef<Node[]>([worldOriginNode]);
+    const vueEdges = shallowRef<Edge[]>([]);
 
     // #endregion
 
@@ -153,13 +166,13 @@ export const useCanvasStore = defineStore('canvas', () => {
                 model.rootNodes.add(id);
             }
 
-            syncModelToView();
+            await syncModelToView();
         }
     }
 
 
     // 添加思维导图根节点
-    function addMindMapRoot(x: number, y: number) {
+    async function addMindMapRoot(x: number, y: number) {
         const id = crypto.randomUUID();
         const newNode: MarkdownPayload = {
             id,
@@ -176,12 +189,13 @@ export const useCanvasStore = defineStore('canvas', () => {
         model.nodes[id] = newNode;
         model.rootNodes.add(id);
 
-        syncModelToView();
+        await syncModelToView();
+        selectNode(id)
         return id;
     }
 
     // 添加思维导图子节点
-    function addMindMapChild(parentId: string) {
+    async function addMindMapChild(parentId: string) {
         const parent = model.nodes[parentId];
         if (!parent) return;
 
@@ -204,11 +218,52 @@ export const useCanvasStore = defineStore('canvas', () => {
         parent.childrenIds.push(newId);
 
         // 重新计算布局
-        syncModelToView();
+        await syncModelToView();
+
+        selectNode(newId)
+    }
+
+    async function addMindMapChildBatch(parentIds: string[]) : Promise<string[]> {
+        if (parentIds.length === 0) return [];
+
+        const newIds: string[] = [];
+        // 1. 批量更新数据模型 (纯 JS 操作，极快)
+        parentIds.forEach(parentId => {
+            const parent = model.nodes[parentId];
+            if (!parent) return;
+
+            const newId = crypto.randomUUID();
+            const newNode: MarkdownPayload = {
+                id: newId,
+                structure: 'node',
+                contentType: 'markdown',
+                content: '子主题',
+                x: 0, y: 0,
+                width: NODE_CONSTANTS.MIN_WIDTH,
+                height: NODE_CONSTANTS.MIN_HEIGHT,
+                fixedSize: false,
+                parentId: parentId,
+                childrenIds: []
+            };
+
+            model.nodes[newId] = newNode;
+            parent.childrenIds.push(newId);
+            newIds.push(newId);
+        });
+        // 2. [关键] 只触发一次视图同步和排版
+        await syncModelToView();
+
+        console.log('before', getSelectedNodes.value)
+        // 3. (可选) 选中所有新生成的节点？或者保持原样
+        // 选中逻辑也可以批量化，这里暂时略过        
+        console.log(getSelectedNodes.value)
+        removeSelectedNodes(getSelectedNodes.value)
+        return newIds
+        // addSelectedNodes(nodesToSelect.map(id => findNode(id) as GraphNode))
     }
 
     // 添加思维导图同级节点
-    function addMindMapSibling(currentNodeId: string) {
+    async function addMindMapSibling(currentNodeId: string) {
         const current = model.nodes[currentNodeId];
         if (!current || !current.parentId) return; // 根节点没有同级
 
@@ -241,7 +296,7 @@ export const useCanvasStore = defineStore('canvas', () => {
             parent.childrenIds.push(newId);
         }
 
-        syncModelToView();
+        await syncModelToView();
 
         // 返回新 ID 以便组件聚焦
         return newId;
@@ -251,7 +306,7 @@ export const useCanvasStore = defineStore('canvas', () => {
     // #region 【UI -> 数据】删
 
     // 5. 递归删除节点
-    function removeNodeFromModel(id: string) {
+    async function removeNodeFromModel(id: string) {
         const node = model.nodes[id];
         if (!node) return;
 
@@ -281,7 +336,7 @@ export const useCanvasStore = defineStore('canvas', () => {
         // 触发重绘 (如果是 VueFlow 的事件回调触发的，可能不需要这步，但为了安全起见)
         // 这里的策略是：如果是 Delete 键触发的，视图已经没了，我们只改 Model
         // 如果是代码逻辑触发的，我们需要 sync
-        syncModelToView()
+        await syncModelToView()
     }
 
     //#endregion
@@ -304,7 +359,7 @@ export const useCanvasStore = defineStore('canvas', () => {
             node.height = size.height;
             node.fixedSize = true;
             // 使用防抖 (Debounce) 或直接调用，取决于性能要求
-            syncModelToView();
+            debouncedLayout();
         }
     }
 
@@ -547,6 +602,7 @@ export const useCanvasStore = defineStore('canvas', () => {
         addContentNode,
         addMindMapRoot,
         addMindMapChild,
+        addMindMapChildBatch,
         updateNodePosition,
         updateNodeContent,
         updateNodeLink,
