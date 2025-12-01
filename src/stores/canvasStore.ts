@@ -36,18 +36,22 @@ export const useCanvasStore = defineStore('canvas', () => {
     const historyStack = shallowRef<HistoryEntry[]>([]);
     const futureStack = shallowRef<HistoryEntry[]>([]);
 
-    function execute(mutator: (draft: CanvasModel) => void) {
-        // debugger
+    function execute(mutator: (draft: CanvasModel) => void, recordHistory = true) {
+        if (recordHistory) {
+            console.trace("execute")
+        }
         const nextState = produce(model.value, mutator,
             (patches, inversePatches) => {
-                // 记录补丁
-                historyStack.value.push({
-                    undo: inversePatches,
-                    redo: patches
-                });
+                if (recordHistory) {
+                    // 记录补丁
+                    historyStack.value.push({
+                        undo: inversePatches,
+                        redo: patches
+                    });
 
-                if (historyStack.value.length > 50) historyStack.value.shift();
-                futureStack.value = [];
+                    if (historyStack.value.length > 50) historyStack.value.shift();
+                    futureStack.value = [];
+                }
             });
 
         // [关键] 更新状态：直接替换 .value
@@ -159,7 +163,7 @@ export const useCanvasStore = defineStore('canvas', () => {
 
     function createConnection(params: Connection) {
         execute(draft => {
-            const id = `e-${params.source}-${params.target}`;
+            const id = `e-${params.source}-${params.sourceHandle}-${params.target}-${params.targetHandle}`;
 
             // 检查是否已存在 (防止重复连线)
             if (draft.edges.find(e => e.id === id)) return;
@@ -313,6 +317,12 @@ export const useCanvasStore = defineStore('canvas', () => {
     async function addMindMapSiblingBatch(currentNodeIds: string[]) {
 
         const newIds: string[] = [];
+
+        const anyHasParent = currentNodeIds.some(id => model.value.nodes[id]?.parentId)
+        if (!anyHasParent) {
+            return newIds
+        }
+
         await execute(draft => {
             currentNodeIds.forEach(currentNodeId => {
                 const current = draft.nodes[currentNodeId];
@@ -395,13 +405,13 @@ export const useCanvasStore = defineStore('canvas', () => {
     // #region 【UI -> 数据】改
 
     // 更新节点位置 (仅针对 Root 或 Free 节点)
-    function updateNodePosition(id: string, position: XYPosition) {
+    function updateNodePosition(id: string, position: XYPosition, recordHistory = true) {
         execute(draft => {
             const node = draft.nodes[id];
             if (!node) return;
             node.x = position.x;
             node.y = position.y
-        })
+        }, recordHistory)
     }
 
     function updateNodeSize(id: string, size: { width: number, height: number }) {
@@ -423,8 +433,6 @@ export const useCanvasStore = defineStore('canvas', () => {
             const node = draft.nodes[id] as MarkdownPayload;
             if (node) {
                 node.content = content;
-                // 如果内容变长了，可能影响布局，建议触发一次轻量级重排
-                // syncModelToView(); 
             }
         })
     }
@@ -464,20 +472,29 @@ export const useCanvasStore = defineStore('canvas', () => {
             if ('ratio' in data) {
                 // 使用防抖布局，防止频繁触发
                 debouncedLayout();
-                // 如果没有 debouncedLayout，直接调 syncModelToView();
             }
         })
     }
 
     // 仅当 fixedSize = false 时调用
     function reportAutoContentSize(id: string, size: { width: number, height: number }) {
-        const node = model.value.nodes[id];
-        if (node && !node.fixedSize) {
-            // 只有当尺寸真的变了才更新，避免死循环
-            if (node.width !== size.width || node.height !== size.height) {
-                node.width = size.width;
-                node.height = size.height;
-                debouncedLayout();
+        // 1. 先进行只读检查 (读取 Frozen 对象是没问题的，不会报错)
+        // 这里的 model.value.nodes[id] 是只读的，只能读，不能改
+        const currentNode = model.value.nodes[id];
+
+        if (currentNode && !currentNode.fixedSize) {
+            // 检查数值是否变化 (读取操作)
+            if (currentNode.width !== size.width || currentNode.height !== size.height) {
+
+                // 2. [核心修复] 使用 execute 修改
+                // 所有的写入操作必须通过 execute(draft => ...) 进行
+                execute((draft) => {
+                    const node = draft.nodes[id]; // 获取 draft 代理对象
+                    if (node) {
+                        node.width = size.width;
+                        node.height = size.height;
+                    }
+                }, false);
             }
         }
     }
@@ -492,7 +509,6 @@ export const useCanvasStore = defineStore('canvas', () => {
             const edge = draft.edges.find(e => e.id === id);
             if (edge) {
                 edge.label = label;
-                syncModelToView(); // 触发重绘
             }
         })
     }
@@ -556,7 +572,18 @@ export const useCanvasStore = defineStore('canvas', () => {
             // 4. === 执行移动 ===
 
             if (newParentId) {
-                setAsChild(sourceId, newParentId)
+                const node = draft.nodes[sourceId];
+                const oldParentId = node.parentId
+                if (oldParentId) {
+                    const oldParent = draft.nodes[oldParentId]
+                    const index = oldParent.childrenIds.indexOf(sourceId);
+                    if (index !== -1) {
+                        oldParent.childrenIds.splice(index, 1);
+                    }
+                }
+                node.parentId = newParentId
+                node.structure = 'node'
+                draft.rootNodes.delete(sourceId);
             }
 
             // B. 设置新父级
@@ -598,11 +625,11 @@ export const useCanvasStore = defineStore('canvas', () => {
                 targetHandle: e.targetHandle ?? undefined,
                 label: e.label
             } as LogicEdge));
-        })
+        }, false)
     }
 
     // Store Action
-    function setAsRoot(id: string) {
+    function detachNode(id: string, position : XYPosition) {
         execute(draft => {
             const node = draft.nodes[id];
             if (!node) return; // 1. 防御性检查：节点是否存在
@@ -629,23 +656,10 @@ export const useCanvasStore = defineStore('canvas', () => {
 
             // 4. 更新根节点索引
             draft.rootNodes.add(id);
-        })
-    }
 
-    function setAsChild(id: string, parentId: string) {
-        execute(draft => {
-            const node = draft.nodes[id];
-            const oldParentId = node.parentId
-            if (oldParentId) {
-                const oldParent = draft.nodes[oldParentId]
-                const index = oldParent.childrenIds.indexOf(id);
-                if (index !== -1) {
-                    oldParent.childrenIds.splice(index, 1);
-                }
-            }
-            node.parentId = parentId
-            node.structure = 'node'
-            draft.rootNodes.delete(id);
+            // 5. 更新位置
+            node.x = position.x;
+            node.y = position.y
         })
     }
 
@@ -657,23 +671,27 @@ export const useCanvasStore = defineStore('canvas', () => {
     }
 
     async function loadModel(loadedModel: CanvasModel) {
-        if (loadedModel) {
-            // [核心] 全量替换当前数据
-            // 因为 model 是 reactive，不能直接 model = loadedModel
-            // 需要逐个属性覆盖，或者清空后赋值
+        execute(
+            draft => {
+                if (loadedModel) {
+                    // [核心] 全量替换当前数据
+                    // 因为 model 是 reactive，不能直接 model = loadedModel
+                    // 需要逐个属性覆盖，或者清空后赋值
 
-            model.value.rootNodes.clear();
-            Object.keys(model.value.nodes).forEach(k => delete model.value.nodes[k]);
-            model.value.edges = [];
+                    draft.rootNodes.clear();
+                    Object.keys(draft.nodes).forEach(k => delete draft.nodes[k]);
+                    draft.edges = [];
 
-            // 恢复数据
-            Object.assign(model.value.nodes, loadedModel.nodes);
-            loadedModel.rootNodes.forEach(id => model.value.rootNodes.add(id));
-            model.value.edges = loadedModel.edges;
-
-            // 触发渲染
-            nextTick(() => syncModelToView())
-        }
+                    // 恢复数据
+                    Object.assign(draft.nodes, loadedModel.nodes);
+                    loadedModel.rootNodes.forEach(id => draft.rootNodes.add(id));
+                    draft.edges = loadedModel.edges;
+                }
+            }
+        )
+        // 清空撤销/重做历史
+        historyStack.value = []
+        futureStack.value = []
     }
     //#endregion
 
@@ -715,7 +733,7 @@ export const useCanvasStore = defineStore('canvas', () => {
         moveMindMapNodeTo,
         updateNodeSize,
         reportAutoContentSize,
-        setAsRoot,
+        detachNode,
         // 数据持久化
         saveToFile,
         loadModel,

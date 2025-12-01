@@ -111,7 +111,7 @@ function onNodesChange(changes: NodeChange[]) {
 }
 
 function onEdgesChange(changes: EdgeChange[]) {
-    // nextTick(() => store.updateEdgesModel(getEdges.value))
+    nextTick(() => store.updateEdgesModel(getEdges.value))
 }
 
 // #endregion
@@ -205,13 +205,14 @@ function onNodeDragStop(e: NodeDragEvent) {
     const draggedNode = e.node
     e.nodes.forEach((node) => {
         // 同步回 Store
-        store.updateNodePosition(node.id, node.position)
         if (store.dragTargetId && store.dragIntent) {
             console.log(`Moving ${draggedNode.id} -> ${store.dragTargetId} (${store.dragIntent})`)
             // 调用 Store 执行逻辑
             store.moveMindMapNodeTo(node.id, store.dragTargetId, store.dragIntent)
         } else if (store.dragDetachId === node.id) {
-            store.setAsRoot(node.id)
+            store.detachNode(node.id, node.position)
+        }else{
+            store.updateNodePosition(node.id, node.position)
         }
     })
     // 清理状态
@@ -219,8 +220,6 @@ function onNodeDragStop(e: NodeDragEvent) {
     store.dragIntent = null
     store.dragDetachId = null
     dragStartPos.value = { x: 0, y: 0 }
-
-    store.syncModelToView()
 }
 
 // 辅助：计算意图 (简单的 AABB 区域判断)

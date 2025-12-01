@@ -79,21 +79,14 @@ function handleUpdate(type: 'content' | 'url' | 'ratio', val: any) {
 }
 
 function onResize(evt: any) {
-    // evt.params 包含: { x, y, width, height }
-    // 注意：x, y 是该节点当前的绝对坐标
-    // debugger
     const { width, height } = evt.params
-    // 2. 对边缘坐标进行全局网格吸附
+    
     const snappedWidth = snapToGrid(width)
     const snappedHeight = snapToGrid(height)
 
-    // 3. 反推回宽度和高度
-    // 新宽 = 吸附后的右边 - 当前的左边
     const finalWidth = Math.max(100, snappedWidth) // 100 是最小宽度
     const finalHeight = Math.max(40, snappedHeight)
 
-    // 4. 实时更新 Store (这会让界面实时看到吸附效果)
-    // 注意：这里更新的是 model.width/height，createVisualNode 会把它应用到 style 上
     node.dimensions.width = finalWidth
     node.dimensions.height = finalHeight
 }
@@ -131,6 +124,7 @@ function onResizeEnd(evt: any) {
             :is-visible="true"
             :min-width="100"
             :min-height="40"
+            :snap-grid="[20, 20]"
             line-class-name="invisible-resizer-line"
             handle-class-name="invisible-resizer-handle"
             @resize="onResize"

@@ -62,8 +62,9 @@ function initEditor() {
                 // 如果焦点丢失了 (blur)，通知父组件退出编辑
                 if (u.focusChanged && !u.view.hasFocus) {
                     emit('blur')
-                    if (props.data.content != initialContent) {
-                        emit('update:content', u.state.doc.toString())
+                    const docString = u.state.doc.toString()
+                    if (docString !== initialContent) {
+                        emit('update:content', docString)
                     }
                 }
             }),
