@@ -211,6 +211,8 @@ function generateElements(root: LayoutNode, logicRoot: LogicNode) {
         id: `e-${node.parent.data.id}-${node.data.id}`,
         source: node.parent.data.id,
         target: node.data.id,
+        sourceHandle: 'right',
+        targetHandle: 'left',
         type: 'smoothstep',
         animated: false,
         style: { stroke: '#177ddc', strokeWidth: 2 },

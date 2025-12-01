@@ -10,6 +10,8 @@ import { languages } from '@codemirror/language-data'
 // 导入样式
 import { baseTheme, markdownHighlighting } from '@/config/editorTheme'
 import type { MarkdownPayload } from '@/types/model'
+import { markdownKeymapExtension } from '@/config/markdownCommands';
+
 
 const props = defineProps<{
     data: MarkdownPayload
@@ -34,11 +36,15 @@ let view: EditorView | null = null
 function initEditor() {
     if (!editorRef.value || view) return
 
+    const filteredDefaultKeymap = defaultKeymap.filter(
+        (binding) => binding.key !== 'Mod-i'
+    )
+
     const state = EditorState.create({
         doc: props.data.content,
         extensions: [
             history(),
-            keymap.of([indentWithTab,...defaultKeymap, ...historyKeymap]),
+            keymap.of([indentWithTab, ...filteredDefaultKeymap, ...historyKeymap]),
             markdown({ base: markdownLanguage, codeLanguages: languages }),
             EditorView.lineWrapping, // 自动换行
 
@@ -55,7 +61,8 @@ function initEditor() {
                 if (u.focusChanged && !u.view.hasFocus) {
                     emit('blur')
                 }
-            })
+            }),
+            markdownKeymapExtension,
         ]
     })
 
@@ -136,8 +143,8 @@ onBeforeUnmount(() => destroyEditor())
 }
 
 .md-wrapper.is-editing {
-  cursor: text !important;
-  user-select: text;
+    cursor: text !important;
+    user-select: text;
 }
 
 /* === CodeMirror 容器 === */
@@ -154,66 +161,92 @@ onBeforeUnmount(() => destroyEditor())
     font-size: 14px;
     line-height: 1.6;
     color: var(--text-color);
+    font-family: var(--md-font-family);
+    font-size: var(--md-font-size);
+    line-height: var(--md-line-height);
+    color: var(--md-color);
     word-wrap: break-word;
 }
 
-/* 基础排版 */
+/* 标题 */
 .markdown-body :deep(h1) {
-    font-size: 1.6em;
-    font-weight: bold;
-    margin: 0.5em 0;
+    font-size: var(--md-h1-size);
+    font-weight: var(--md-h1-weight);
+    color: var(--md-h1-color);
+    margin: var(--md-h1-margin);
     line-height: 1.2;
     border-bottom: 1px solid var(--border-color);
 }
 
 .markdown-body :deep(h2) {
-    font-size: 1.4em;
-    font-weight: bold;
-    margin: 0.5em 0;
+    font-size: var(--md-h2-size);
+    font-weight: var(--md-h2-weight);
+    color: var(--md-h2-color);
+    margin: var(--md-h2-margin);
+    line-height: 1.3;
+    border-bottom: 1px solid var(--border-color);
 }
 
 .markdown-body :deep(h3) {
-    font-size: 1.2em;
-    font-weight: bold;
-    margin: 0.5em 0;
+    font-size: var(--md-h3-size);
+    font-weight: var(--md-h3-weight);
+    color: var(--md-h3-color);
+    margin: var(--md-h3-margin);
 }
 
+/* 段落 */
 .markdown-body :deep(p) {
+    /* CM6 是按行渲染的，行与行之间没有 margin collapse，
+     所以这里的 margin 需要微调以匹配 CM6 的视觉感受 */
     margin: 0.3em 0;
 }
 
+.markdown-body :deep(p:first-child) {
+    margin-top: 0;
+}
+
+.markdown-body :deep(p:last-child) {
+    margin-bottom: 0;
+}
+
+/* 强调 */
 .markdown-body :deep(strong) {
-    font-weight: bold;
-    color: inherit;
+    font-weight: var(--md-bold-weight);
+    color: var(--md-bold-color);
 }
 
 .markdown-body :deep(em) {
-    font-style: italic;
+    font-style: var(--md-italic-style);
+    color: var(--md-bold-color);
 }
 
-.markdown-body :deep(ul) {
-    padding-left: 1.2em;
-    list-style: disc;
-    margin: 0.2em 0;
-}
-
-.markdown-body :deep(ol) {
-    padding-left: 1.2em;
-    list-style: decimal;
-    margin: 0.2em 0;
-}
-
+/* 引用 */
 .markdown-body :deep(blockquote) {
-    border-left: 3px solid #ddd;
+    border-left: var(--md-quote-border);
     padding-left: 10px;
-    color: #666;
+    color: var(--md-quote-color);
     margin: 0.5em 0;
 }
 
+/* 代码 */
 .markdown-body :deep(code) {
-    background: rgba(150, 150, 150, 0.2);
-    padding: 2px 4px;
-    border-radius: 3px;
-    font-family: monospace;
+    font-family: var(--md-code-font);
+    background-color: var(--md-code-bg);
+    color: var(--md-code-color);
+    border-radius: var(--md-code-radius);
+    padding: 0 4px;
+}
+
+/* 链接 */
+.markdown-body :deep(a) {
+    color: var(--md-link-color);
+    text-decoration: var(--md-link-decoration);
+}
+
+/* 列表 */
+.markdown-body :deep(ul),
+.markdown-body :deep(ol) {
+    padding-left: 1.2em;
+    /* margin: 0.2em 0; */
 }
 </style>

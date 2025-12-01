@@ -63,6 +63,8 @@ export interface LogicEdge {
 
   sourceHandle?: string; 
   targetHandle?: string;
+
+  label: string;
 }
 
 export interface CanvasModel {

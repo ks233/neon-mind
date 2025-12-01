@@ -97,6 +97,7 @@ function onConnect(params: Connection) {
     // params 包含了 source(起点ID), target(终点ID), sourceHandle(起点端点ID) 等信息
     // addEdge 是官方提供的工具，它会自动处理去重，并生成 edge 对象
     addEdges(params)
+    store.createConnection(params)
 }
 
 // 当用户按 Delete 键时，Vue Flow 会先更新视图，然后触发这个回调
@@ -244,6 +245,25 @@ function calculateIntent(source: GraphNode, target: GraphNode): 'child' | 'above
 }
 // #endregion
 
+
+function onEdgeDoubleClick(e: EdgeMouseEvent) {
+    const edgeId = e.edge.id;
+
+    // 简单判断：只允许编辑手动连线 (ID不以 'e-' 开头的通常是手动生成的，
+    // 或者你可以检查 store.model.edges 里有没有这个 ID)
+    // 如果是思维导图的结构线，可能不希望用户改文字
+    const logicEdge = store.model.edges.find(le => le.id === edgeId);
+
+    if (logicEdge) {
+        // 这里使用原生 prompt 做最简单的实现
+        // 实际项目中可以弹出一个 Modal 或 Popover
+        const newLabel = prompt('输入连线文字:', logicEdge.label || '');
+
+        if (newLabel !== null) {
+            store.updateEdgeLabel(edgeId, newLabel);
+        }
+    }
+}
 </script>
 
 <template>
@@ -258,17 +278,18 @@ function calculateIntent(source: GraphNode, target: GraphNode): 'child' | 'above
             :node-types="nodeTypes"
             @dblclick="onDblClick"
             :zoom-on-double-click="false"
-            fit-view-on-init
+            :fit-view-on-init="false"
             @connect="onConnect"
             :delete-key-code="['Delete']"
             :pan-on-drag="[1, 2]"
             :selection-key-code="true"
             multi-selection-key-code="Control"
             :default-edge-options="{
-                type: 'smoothstep',
+                type: 'default',
                 style: { strokeWidth: 2, color: edgeColor },
                 interactionWidth: 50,
             }"
+            :max-zoom="5"
             :selection-mode="SelectionMode.Partial"
             :edges-updatable="true"
             @edge-update-start="onEdgeUpdateStart"
@@ -280,6 +301,7 @@ function calculateIntent(source: GraphNode, target: GraphNode): 'child' | 'above
             @node-drag-stop="onNodeDragStop"
             @nodes-change="onNodesChange"
             @edges-change="onEdgesChange"
+            @edge-double-click="onEdgeDoubleClick"
             :only-render-visible-elements="false"
             :snap-to-grid="true"
             :snap-grid="[gridSize, gridSize]">
@@ -290,7 +312,7 @@ function calculateIntent(source: GraphNode, target: GraphNode): 'child' | 'above
         <div class="debug-panel">
             <div class="debug-row">
                 <span class="label">Nodes:</span>
-                <span class="value">{{ store.vueNodes.length }}</span>
+                <span class="value">{{ store.vueNodes.length - 1 }}</span>
             </div>
             <div class="debug-row">
                 <span class="label">Edges:</span>

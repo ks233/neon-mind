@@ -140,8 +140,8 @@ function onResize(evt: any) {
             @resize="onResize"
             @resize-end="onResizeEnd" />
 
-        <Handle id="left" type="target" :position="Position.Left" class="io-handle" />
-        <Handle id="top" type="target" :position="Position.Top" class="io-handle" />
+        <Handle id="left" type="source" :position="Position.Left" class="io-handle" />
+        <Handle id="top" type="source" :position="Position.Top" class="io-handle" />
         <Handle id="right" type="source" :position="Position.Right" class="io-handle" />
         <Handle id="bottom" type="source" :position="Position.Bottom" class="io-handle" />
 
@@ -217,14 +217,14 @@ function onResize(evt: any) {
     position: relative;
     display: grid;
     min-height: 24px;
-    padding: 2px 8px;
+    padding: 6px 8px;
     overflow: hidden;
 }
 
 /* 选中状态 */
 .universal-node.selected {
-    border-color: #1890ff;
-    box-shadow: 0 0 0 5px rgba(24, 144, 255, 0.2);
+    /* border-color: #1890ff; */
+    box-shadow: 0 0 0 5px rgba(24, 144, 255, 0.5);
 }
 
 /* 根节点样式 */

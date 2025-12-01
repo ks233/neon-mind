@@ -2,7 +2,7 @@ import { defineStore } from 'pinia';
 import { nextTick, reactive, ref, shallowRef, toRaw } from 'vue';
 import type { CanvasModel, LogicNode, LogicEdge, MarkdownPayload, ImagePayload, LinkPayload } from '../types/model';
 import type { Node, Edge, XYPosition, Connection, GraphNode } from '@vue-flow/core';
-import { useVueFlow } from '@vue-flow/core';
+import { MarkerType, useVueFlow } from '@vue-flow/core';
 
 import { computeMindMapLayout } from '@/services/layoutService';
 
@@ -70,8 +70,22 @@ export const useCanvasStore = defineStore('canvas', () => {
                 id: edge.id,
                 source: edge.source,
                 target: edge.target,
-                type: 'smoothstep', // 默认线型
-                animated: false
+                type: 'default', // 默认线型
+                animated: false,
+
+                // [!code focus:5] 恢复 Handle 和 Label
+                sourceHandle: edge.sourceHandle,
+                targetHandle: edge.targetHandle,
+                label: edge.label, // Vue Flow 会自动渲染这个 label
+
+                style: { stroke: '#b1b1b7', strokeWidth: 2 },
+                // 增加 label 样式 (可选)
+                labelStyle: { fill: '#888', fontWeight: 600, fontSize: 12 },
+                labelBgStyle: { fill: 'var(--bg-color)', fillOpacity: 0.8 },
+
+                // [!code focus:2] 样式：添加箭头
+                markerEnd: MarkerType.ArrowClosed, // 闭合箭头
+
             });
         });
 
@@ -93,6 +107,27 @@ export const useCanvasStore = defineStore('canvas', () => {
     //#endregion
 
     // #region 【UI -> 数据】增
+
+    function createConnection(params: Connection) {
+        const id = `e-${params.source}-${params.target}`;
+
+        // 检查是否已存在 (防止重复连线)
+        if (model.edges.find(e => e.id === id)) return;
+
+        model.edges.push({
+            id,
+            source: params.source,
+            target: params.target,
+
+            // [!code focus:2] 保存具体的连接桩点
+            sourceHandle: params.sourceHandle ?? undefined,
+            targetHandle: params.targetHandle ?? undefined,
+
+            label: '' // 默认无文字
+        });
+
+        syncModelToView();
+    }
 
     // [新增] 创建内容节点的通用方法 (图片/链接)
     // 如果传入 parentId，则创建为子节点；否则创建为游离节点
@@ -427,6 +462,14 @@ export const useCanvasStore = defineStore('canvas', () => {
     const debouncedLayout = useDebounceFn(() => {
         syncModelToView();
     }, 300);
+
+    function updateEdgeLabel(id: string, label: string) {
+        const edge = model.edges.find(e => e.id === id);
+        if (edge) {
+            edge.label = label;
+            syncModelToView(); // 触发重绘
+        }
+    }
     //#endregion
 
     // #region 【UI -> 数据】移
@@ -621,7 +664,7 @@ export const useCanvasStore = defineStore('canvas', () => {
             model.edges = loadedModel.edges;
 
             // 触发渲染
-            await syncModelToView();
+            nextTick(() => syncModelToView())
         }
     }
     //#endregion
@@ -647,6 +690,7 @@ export const useCanvasStore = defineStore('canvas', () => {
         dragIntent,
         dragDetachId,
         // Actions
+        createConnection,
         addContentNode,
         addMindMapRoot,
         addMindMapChild,
@@ -657,6 +701,7 @@ export const useCanvasStore = defineStore('canvas', () => {
         updateNodeData,
         removeNodeFromModel,
         updateEdgesModel,
+        updateEdgeLabel,
         syncModelToView,
         addMindMapSibling,
         moveMindMapNode,
