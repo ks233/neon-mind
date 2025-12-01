@@ -117,21 +117,21 @@ export const useCanvasStore = defineStore('canvas', () => {
 
         // 1. 构造图片节点数据
         if (type === 'image') {
-            let url = ''
+            let displaySrc = ''
             if (data instanceof File) {
-                url = URL.createObjectURL(data); // MVP: 使用 Blob URL
+                displaySrc = URL.createObjectURL(data); // MVP: 使用 Blob URL
             } else {
-                url = convertFileSrc(data);
-                console.log('aaa', url)
+                displaySrc = convertFileSrc(data);
             }
 
             payload = {
                 ...baseNode,
                 contentType: 'image',
-                src: url,
+                // height 会由 Layout 根据 ratio 算出来
                 ratio: 1, // 初始比例，组件加载完会更新
                 width: 200, // 默认宽
-                // height 会由 Layout 根据 ratio 算出来
+                localSrc: undefined, // 标记为"未持久化"
+                displaySrc: displaySrc, // 立即显示
             } as ImagePayload;
         }
         // 2. 构造链接节点数据
@@ -604,6 +604,26 @@ export const useCanvasStore = defineStore('canvas', () => {
             await syncModelToView();
         }
     }
+
+    async function loadModel(loadedModel: CanvasModel) {
+        if (loadedModel) {
+            // [核心] 全量替换当前数据
+            // 因为 model 是 reactive，不能直接 model = loadedModel
+            // 需要逐个属性覆盖，或者清空后赋值
+
+            model.rootNodes.clear();
+            Object.keys(model.nodes).forEach(k => delete model.nodes[k]);
+            model.edges = [];
+
+            // 恢复数据
+            Object.assign(model.nodes, loadedModel.nodes);
+            loadedModel.rootNodes.forEach(id => model.rootNodes.add(id));
+            model.edges = loadedModel.edges;
+
+            // 触发渲染
+            await syncModelToView();
+        }
+    }
     //#endregion
 
     // 辅助：检查 checkId 是否是 rootId 的后代
@@ -646,6 +666,7 @@ export const useCanvasStore = defineStore('canvas', () => {
         setAsRoot,
         // 数据持久化
         saveToFile,
-        loadFromFile
+        loadFromFile,
+        loadModel
     };
 });

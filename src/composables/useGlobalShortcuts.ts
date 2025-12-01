@@ -4,6 +4,7 @@ import { useCanvasStore } from '@/stores/canvasStore'
 import { isInputActive } from '@/utils/keyboard'
 import { GraphNode, isGraphNode, useVueFlow } from '@vue-flow/core'
 import { nextTick } from 'vue'
+import { PersistenceManager } from '@/services/persistence/PersistenceManager'
 
 export function useGlobalShortcuts() {
     const store = useCanvasStore()
@@ -51,19 +52,25 @@ export function useGlobalShortcuts() {
         }
     });
 
-    // Ctrl + S
-    onKeyStroke('s', (e) => {
-        if (e.ctrlKey || e.metaKey) {
+    // 保存
+    onKeyStroke('s', async (e) => {
+        if (e.ctrlKey) {
             e.preventDefault();
-            store.saveToFile();
+            // 如果已经有路径，可以直接保存(覆盖)；如果没有，另存为
+            // 这里简化为每次都另存为
+            await PersistenceManager.saveProjectAs(store.model);
         }
     });
 
-    // Ctrl + O (Open)
-    onKeyStroke('o', (e) => {
-        if (e.ctrlKey || e.metaKey) {
+    // 打开
+    onKeyStroke('o', async (e) => {
+        if (e.ctrlKey) {
             e.preventDefault();
-            store.loadFromFile();
+            const newModel = await PersistenceManager.openProject();
+            if (newModel) {
+                // 清空并加载
+                store.loadModel(newModel);
+            }
         }
     });
 

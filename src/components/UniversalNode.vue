@@ -19,7 +19,7 @@ const isDetaching = computed(() => store.dragDetachId === id && store.dragIntent
 
 const { id } = useNode()
 const store = useCanvasStore()
-import { LogicNode } from '@/types/model'
+import { ImagePayload, LogicNode } from '@/types/model'
 import { resolveContentComponent } from '@/utils/contentResolver'
 import { snapToGrid } from '@/utils/grid'
 
@@ -161,6 +161,10 @@ function onResize(evt: any) {
             <span>({{ Math.round(position.x) }}, {{ Math.round(position.y || 0) }}) </span>
             <span>({{ Math.round(dimensions.width) }}, {{ Math.round(dimensions.height || 0) }}) </span>
             <span style="color: #ff4d4f">{{ id.substring(0, 8) }}</span><br>
+            <template v-if="data.logicNode.contentType == 'image'">
+                <span> display: {{ (data.logicNode as ImagePayload).displaySrc }}</span><br>
+                <span> local: {{ (data.logicNode as ImagePayload).localSrc }}</span>
+            </template>
             <!-- {{ data }} -->
         </div>
     </div>
@@ -282,17 +286,20 @@ function onResize(evt: any) {
 }
 
 .universal-node::after {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  pointer-events: none; /* 鼠标穿透 */
-  border: 0 solid transparent; /* 默认无边框 */
-  transition: border-color 0.1s;
-  z-index: 100;
-  border-radius: inherit; /* 跟随圆角 */
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    pointer-events: none;
+    /* 鼠标穿透 */
+    border: 0 solid transparent;
+    /* 默认无边框 */
+    transition: border-color 0.1s;
+    z-index: 100;
+    border-radius: inherit;
+    /* 跟随圆角 */
 }
 
 .drag-over-above::after {

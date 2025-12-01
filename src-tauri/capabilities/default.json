@@ -20,9 +20,13 @@
         }
       ],
       "deny": []
+    },{
+        "identifier": "fs:scope",
+        "allow": [{"path": "**/*"}]
     },
     "dialog:default",
     "fs:default",
-    "fs:allow-app-write"
+    "fs:allow-app-write",
+    "fs:allow-copy-file"
   ]
 }

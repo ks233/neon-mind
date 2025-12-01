@@ -34,7 +34,7 @@ function onImageLoad() {
     <div class="image-content">
         <img
             ref="imgRef"
-            :src="data.src"
+            :src="data.displaySrc"
             :style="{
                 objectFit: data.fit || 'cover',
                 // 如果是固定大小，图片填满容器；如果是自动大小，由容器限制
@@ -44,7 +44,7 @@ function onImageLoad() {
             draggable="false"
             @load="onImageLoad" />
 
-        <div v-if="!data.src" class="image-placeholder">
+        <div v-if="!data.displaySrc" class="image-placeholder">
             No Image
         </div>
     </div>
