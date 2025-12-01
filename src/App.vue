@@ -111,7 +111,7 @@ function onNodesChange(changes: NodeChange[]) {
 }
 
 function onEdgesChange(changes: EdgeChange[]) {
-    nextTick(() => store.updateEdgesModel(getEdges.value))
+    // nextTick(() => store.updateEdgesModel(getEdges.value))
 }
 
 // #endregion

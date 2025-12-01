@@ -97,30 +97,30 @@ export function useGlobalShortcuts() {
         }
     });
 
-    // // 2. 撤销/重做 (Ctrl + Z / Ctrl + Y)
-    // onKeyStroke('z', (e) => {
-    //     if ((e.ctrlKey || e.metaKey) && !isInputActive()) {
-    //         e.preventDefault()
-    //         if (e.shiftKey) {
-    //             // store.redo()
-    //         } else {
-    //             // store.undo()
-    //         }
-    //     }
-    // })
+    // 撤销 (Ctrl + Z)
+    onKeyStroke('z', (e) => {
+        if ((e.ctrlKey || e.metaKey) && !e.shiftKey) {
+            if (isInputActive()) return; // 编辑文字时交给 CodeMirror
 
-    // // 3. 重做 (Ctrl + Y) - Windows 习惯
-    // onKeyStroke('y', (e) => {
-    //     if ((e.ctrlKey || e.metaKey) && !isInputActive()) {
-    //         e.preventDefault()
-    //         // store.redo()
-    //     }
-    // })
+            e.preventDefault();
+            console.log('触发撤销');
+            store.undo();
+        }
+    })
 
-    // // 4. 删除 (Delete / Backspace)
-    // onKeyStroke(['Delete', 'Backspace'], (e) => {
-    //     if (!isInputActive()) {
-    //         // store.removeSelectedElements()
-    //     }
-    // })
+    // 重做 (Ctrl + Y 或 Ctrl + Shift + Z)
+    onKeyStroke(['y', 'z'], (e) => {
+        // Ctrl + Y
+        const isCtrlY = (e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'y';
+        // Ctrl + Shift + Z
+        const isCtrlShiftZ = (e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === 'z';
+
+        if (isCtrlY || isCtrlShiftZ) {
+            if (isInputActive()) return;
+
+            e.preventDefault();
+            console.log('触发重做');
+            store.redo();
+        }
+    })
 }

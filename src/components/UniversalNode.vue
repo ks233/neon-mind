@@ -17,7 +17,7 @@ const props = defineProps<NodeProps<NodeData>>()
 const showDebug = ref(false)
 const isDetaching = computed(() => store.dragDetachId === id && store.dragIntent === null)
 
-const { id } = useNode()
+const { id, node } = useNode()
 const store = useCanvasStore()
 import { ImagePayload, LogicNode } from '@/types/model'
 import { resolveContentComponent } from '@/utils/contentResolver'
@@ -32,7 +32,7 @@ const isTarget = computed(() => store.dragTargetId === id)
 const intent = computed(() => isTarget.value ? store.dragIntent : null)
 
 // 计算是否固定尺寸
-const isFixedSize = computed(() => props.data.fixedSize)
+const isFixedSize = computed(() => props.data.fixedSize || node.resizing)
 
 // 注入快捷键
 const selectedRef = toRef(props, 'selected')
@@ -62,12 +62,6 @@ function onDblClick(evt: MouseEvent) {
     isEditing.value = true
 }
 
-// 3. 手动调整大小结束
-function onResizeEnd(evt: any) {
-    // 这会将 fixedSize 置为 true，切换到固定模式
-    onResize(evt)
-}
-
 function handleUpdate(type: 'content' | 'url' | 'ratio', val: any) {
     switch (type) {
         case 'content':
@@ -87,25 +81,28 @@ function handleUpdate(type: 'content' | 'url' | 'ratio', val: any) {
 function onResize(evt: any) {
     // evt.params 包含: { x, y, width, height }
     // 注意：x, y 是该节点当前的绝对坐标
-    const { x, y, width, height } = evt.params
-
-    // 1. 计算右边缘和下边缘的绝对世界坐标
-    // (我们假设用户主要拖拽右下角，如果是左上角拖拽，逻辑会更复杂，需要修正 x/y)
-    const absoluteRight = x + width
-    const absoluteBottom = y + height
-
+    // debugger
+    const { width, height } = evt.params
     // 2. 对边缘坐标进行全局网格吸附
-    const snappedRight = snapToGrid(absoluteRight)
-    const snappedBottom = snapToGrid(absoluteBottom)
+    const snappedWidth = snapToGrid(width)
+    const snappedHeight = snapToGrid(height)
 
     // 3. 反推回宽度和高度
     // 新宽 = 吸附后的右边 - 当前的左边
-    const finalWidth = Math.max(100, snappedRight - x) // 100 是最小宽度
-    const finalHeight = Math.max(40, snappedBottom - y)
+    const finalWidth = Math.max(100, snappedWidth) // 100 是最小宽度
+    const finalHeight = Math.max(40, snappedHeight)
 
     // 4. 实时更新 Store (这会让界面实时看到吸附效果)
     // 注意：这里更新的是 model.width/height，createVisualNode 会把它应用到 style 上
-    store.updateNodeSize(id, { width: finalWidth, height: finalHeight })
+    node.dimensions.width = finalWidth
+    node.dimensions.height = finalHeight
+}
+
+// 3. 手动调整大小结束
+function onResizeEnd(evt: any) {
+    // 这会将 fixedSize 置为 true，切换到固定模式
+    onResize(evt)
+    store.updateNodeSize(id, { width: node.dimensions.width, height: node.dimensions.height })
 }
 
 </script>
@@ -134,7 +131,6 @@ function onResize(evt: any) {
             :is-visible="true"
             :min-width="100"
             :min-height="40"
-            :snap-grid="[20, 20]"
             line-class-name="invisible-resizer-line"
             handle-class-name="invisible-resizer-handle"
             @resize="onResize"

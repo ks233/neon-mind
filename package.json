@@ -31,6 +31,7 @@
     "codemirror": "^6.0.2",
     "d3-hierarchy": "^3.1.2",
     "elkjs": "^0.11.0",
+    "immer": "^11.0.1",
     "markdown-it": "^14.1.0",
     "pinia": "^3.0.4",
     "vue": "^3.5.13"

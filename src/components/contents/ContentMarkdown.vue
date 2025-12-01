@@ -32,6 +32,8 @@ const renderedHtml = computed(() => md.render(props.data.content || ''))
 const editorRef = ref<HTMLElement | null>(null)
 let view: EditorView | null = null
 
+let initialContent = ''
+
 // 初始化编辑器
 function initEditor() {
     if (!editorRef.value || view) return
@@ -39,7 +41,7 @@ function initEditor() {
     const filteredDefaultKeymap = defaultKeymap.filter(
         (binding) => binding.key !== 'Mod-i'
     )
-
+    initialContent = props.data.content
     const state = EditorState.create({
         doc: props.data.content,
         extensions: [
@@ -55,11 +57,14 @@ function initEditor() {
             EditorView.updateListener.of((u) => {
                 // 如果内容变了，同步数据
                 if (u.docChanged) {
-                    emit('update:content', u.state.doc.toString())
+
                 }
                 // 如果焦点丢失了 (blur)，通知父组件退出编辑
                 if (u.focusChanged && !u.view.hasFocus) {
                     emit('blur')
+                    if (props.data.content != initialContent) {
+                        emit('update:content', u.state.doc.toString())
+                    }
                 }
             }),
             markdownKeymapExtension,
