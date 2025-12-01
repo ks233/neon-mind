@@ -15,6 +15,7 @@ export const baseTheme = EditorView.theme({
         padding: "4px 0", // 与预览模式的 padding 保持一致
         lineHeight: "var(--md-line-height)",
         fontFamily: "var(--md-font-family) !important",
+        caretColor: "var(--md-color)",
     },
     ".cm-gutters": { display: "none" },
     "&.cm-focused": { outline: "none" },

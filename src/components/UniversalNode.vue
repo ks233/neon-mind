@@ -245,7 +245,7 @@ function onResize(evt: any) {
     background: var(--handle-color);
     opacity: 0;
     transition: opacity 0.2s;
-    z-index: -1;
+    /* z-index: -1; */
 }
 
 /* [核心代码] 使用伪元素扩大判定范围 */

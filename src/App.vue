@@ -289,7 +289,7 @@ function onEdgeDoubleClick(e: EdgeMouseEvent) {
                 style: { strokeWidth: 2, color: edgeColor },
                 interactionWidth: 50,
             }"
-            :max-zoom="5"
+            :max-zoom="4"
             :selection-mode="SelectionMode.Partial"
             :edges-updatable="true"
             @edge-update-start="onEdgeUpdateStart"
