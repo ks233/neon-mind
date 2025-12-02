@@ -281,7 +281,7 @@ export const useCanvasStore = defineStore('canvas', () => {
                 id,
                 structure: 'root',
                 contentType: 'markdown',
-                content: 'Mind Map Root',
+                content: 'New node',
                 x,
                 y,
                 width: NODE_CONSTANTS.MIN_WIDTH,
@@ -292,6 +292,7 @@ export const useCanvasStore = defineStore('canvas', () => {
             draft.nodes[id] = newNode;
             draft.rootNodes.add(id);
         })
+        startEditing(id)
         return id;
     }
 

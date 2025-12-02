@@ -43,14 +43,9 @@ export function useGlobalShortcuts() {
                     .map(id => findNode(id))
                     .filter((n): n is GraphNode => typeof n !== 'undefined'); // 过滤掉潜在的 undefined
 
-
                 if (newGraphNodes.length == 1) {
-                    // 能进入编辑模式但无法聚焦和全选
                     store.startEditing(newGraphNodes[0].id)
-                    // 能用但丑陋
-                    // setTimeout(() => store.startEditing(newGraphNodes[0].id), 1);
                 }
-                
                 // 批量选中
                 addSelectedNodes(newGraphNodes);
             }
@@ -79,10 +74,23 @@ export function useGlobalShortcuts() {
                 const newGraphNodes = newIds
                     .map(id => findNode(id))
                     .filter((n): n is GraphNode => typeof n !== 'undefined'); // 过滤掉潜在的 undefined
+
+                if (newGraphNodes.length == 1) {
+                    store.startEditing(newGraphNodes[0].id)
+                }
+
                 addSelectedNodes(newGraphNodes);
             }
         }
     });
+
+    onKeyStroke('F2', async (e) => {
+        console.log('f2')
+        if(getSelectedNodes.value.length == 1){
+            const selectedNode = getSelectedNodes.value[0]
+            store.startEditing(selectedNode.id)
+        }
+    })
 
     // 保存
     onKeyStroke('s', async (e) => {

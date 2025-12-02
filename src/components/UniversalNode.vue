@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, nextTick, toRef, computed } from 'vue'
-import { Handle, Position, useNode, type NodeProps } from '@vue-flow/core'
+import { GraphEdge, GraphNode, Handle, Position, useNode, useVueFlow, type NodeProps } from '@vue-flow/core'
 import { useResizeObserver } from '@vueuse/core'
 import { NodeResizer } from '@vue-flow/node-resizer'
 import { useCanvasStore } from '@/stores/canvasStore'
@@ -134,6 +134,26 @@ function handleMouseDown(e: MouseEvent) {
     e.preventDefault();
 }
 
+
+const { addSelectedNodes, removeSelectedNodes, getSelectedNodes, findNode } = useVueFlow()
+
+async function onContentCommand(key: string) {
+    if (key === 'Tab') {
+        const newIds = await store.addMindMapChildBatch([id])
+        if (newIds.length == 1) {
+            store.stopEditing();
+            const newNode = findNode(newIds[0]) as GraphNode
+            removeSelectedNodes([newNode])
+            addSelectedNodes([newNode])
+            store.startEditing(newIds[0])
+        }
+    } else if (key === 'Enter') {
+        // 允许 Shift+Enter 换行 (已经在子组件过滤了吗？最好在子组件处理)
+        // 我们的子组件逻辑是全拦截，所以这里直接执行
+        isEditing.value = false;
+    }
+}
+
 </script>
 
 <template>
@@ -149,7 +169,8 @@ function handleMouseDown(e: MouseEvent) {
             'drag-over-above': isTarget && intent === 'above',
             'drag-over-below': isTarget && intent === 'below',
             'dragging': dragging,
-            'is-detaching': isDetaching // [!code focus]
+            'is-detaching': isDetaching,
+            'is-editing': isEditing
         }"
         @dblclick="onDblClick"
 
@@ -179,6 +200,7 @@ function handleMouseDown(e: MouseEvent) {
                 :fixed-size="isFixedSize"
                 :is-editing="isEditing"
                 @blur="isEditing = false"
+                @command="onContentCommand"
                 @update:content="(v) => handleUpdate('content', v)"
                 @update:url="(v) => handleUpdate('url', v)"
                 @update:ratio="(v) => handleUpdate('ratio', v)" />
@@ -253,6 +275,12 @@ function handleMouseDown(e: MouseEvent) {
     /* border-color: #1890ff; */
     box-shadow: 0 0 0 5px rgba(24, 144, 255, 0.5);
 }
+
+.universal-node.is-editing {
+    background-color: var(--node-bg-editing);
+    /* 限制最大宽度，超过自动换行 */
+}
+
 
 /* 根节点样式 */
 .universal-node.is-root {

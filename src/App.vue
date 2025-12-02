@@ -85,6 +85,7 @@ function onDblClick(event: MouseEvent) {
     // 修正坐标中心（可选）
     store.addMindMapRoot(finalX, finalY)
 
+
     // 阻止默认行为（防止选中文字等）
     event.preventDefault()
 }
@@ -111,8 +112,8 @@ function onNodesChange(changes: NodeChange[]) {
 }
 
 function onEdgesChange(changes: EdgeChange[]) {
-    changes.forEach(change =>{
-        if(change.type === 'remove'){
+    changes.forEach(change => {
+        if (change.type === 'remove') {
             store.removeEdge(change.id)
         }
     })
@@ -331,7 +332,6 @@ function onEdgeDoubleClick(e: EdgeMouseEvent) {
 
     /* 再次确保没有滚动条 */
     overflow: hidden;
-
     /* 确保背景色，防止加载时闪白屏 */
 }
 

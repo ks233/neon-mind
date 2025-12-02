@@ -121,6 +121,22 @@ onMounted(() => {
 
 // 组件卸载时兜底清理
 onBeforeUnmount(() => destroyEditor())
+
+function onKeyDownCapture(e: KeyboardEvent) {
+    // 仅在自动大小模式下拦截 Tab 和 Enter
+    if (!props.fixedSize) {
+        if (e.key === 'Tab' || e.key === 'Enter') {
+            // 1. 阻止 CodeMirror 接收此事件 (防止缩进/换行)
+            e.stopPropagation()
+            // 2. 阻止浏览器默认行为 (防止焦点切换)
+            e.preventDefault()
+
+            // 3. 通知父组件办事
+            emit('command', e.key)
+        }
+    }
+    // 其他按键（如打字）放行给 CodeMirror
+}
 </script>
 
 <template>
@@ -133,7 +149,8 @@ onBeforeUnmount(() => destroyEditor())
         }"
         @keypress.stop
         @keydown.stop
-        @keyup.stop>
+        @keyup.stop
+        @keydown.capture="onKeyDownCapture">
         <div
             v-if="isEditing"
             ref="editorRef"
@@ -167,7 +184,6 @@ onBeforeUnmount(() => destroyEditor())
 /* 固定大小：允许内部滚动 */
 .md-wrapper.is-fixed {
     overflow-y: auto;
-    scrollbar-width: thin;
 }
 
 .md-wrapper.is-editing {
@@ -227,6 +243,7 @@ onBeforeUnmount(() => destroyEditor())
     /* CM6 是按行渲染的，行与行之间没有 margin collapse，
      所以这里的 margin 需要微调以匹配 CM6 的视觉感受 */
     margin: 0.3em 0;
+    line-height: 1.5;
 }
 
 .markdown-body :deep(p:first-child) {
@@ -275,6 +292,44 @@ onBeforeUnmount(() => destroyEditor())
 .markdown-body :deep(ul),
 .markdown-body :deep(ol) {
     padding-left: 1.2em;
-    /* margin: 0.2em 0; */
+    /* margin: 0.6em 0; */
 }
+
+/* ... 原有样式 ... */
+
+/* === 自定义滚动条样式 === */
+
+/* 1. 定义滚动条的整体尺寸 */
+.md-wrapper::-webkit-scrollbar,
+:deep(.cm-scroller)::-webkit-scrollbar {
+  width: 6px;  /* 纵向滚动条宽度 */
+  height: 6px; /* 横向滚动条高度 */
+}
+
+/* 2. 定义滚动条轨道 (Track) - 通常设为透明 */
+.md-wrapper::-webkit-scrollbar-track,
+:deep(.cm-scroller)::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* 3. 定义滑块 (Thumb) - 核心样式 */
+.md-wrapper::-webkit-scrollbar-thumb,
+:deep(.cm-scroller)::-webkit-scrollbar-thumb {
+  /* 使用半透明灰色，这样在深色/浅色模式下都能看清 */
+  background-color: rgba(150, 150, 150, 0.3);
+  border-radius: 4px; /* 圆角 */
+}
+
+/* 4. 鼠标悬停在滑块上时加深颜色 */
+.md-wrapper::-webkit-scrollbar-thumb:hover,
+:deep(.cm-scroller)::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(150, 150, 150, 0.6);
+}
+
+/* 5. (可选) 只有在鼠标悬停在容器上时才显示滚动条 */
+/* 这会让界面更像 Notion，平时极其干净 */
+/* .md-wrapper:not(:hover)::-webkit-scrollbar-thumb,
+.md-wrapper:not(:hover) :deep(.cm-scroller)::-webkit-scrollbar-thumb {
+  background-color: transparent;
+} */
 </style>
