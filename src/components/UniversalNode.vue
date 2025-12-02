@@ -80,7 +80,7 @@ function handleUpdate(type: 'content' | 'url' | 'ratio', val: any) {
 
 function onResize(evt: any) {
     const { width, height } = evt.params
-    
+
     const snappedWidth = snapToGrid(width)
     const snappedHeight = snapToGrid(height)
 
@@ -118,7 +118,8 @@ function onResizeEnd(evt: any) {
         @dblclick="onDblClick"
 
         @mouseenter="showDebug = true"
-        @mouseleave="showDebug = false">
+        @mouseleave="showDebug = false"
+        @mousedown.prevent>
 
         <NodeResizer
             :is-visible="true"

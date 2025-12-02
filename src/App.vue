@@ -172,7 +172,7 @@ function onNodeDrag(e: NodeDragEvent) {
     const intersections = getIntersectingNodes(draggedNode)
 
     // 过滤：只关心思维导图节点，且忽略自己和自己的子孙(可选，store里有校验)
-    const targetNode = intersections.find(n => n.id !== draggedNode.id)
+    const targetNode = intersections.find(n => n.id !== draggedNode.id && n.id !== 'world-origin')
 
     if (targetNode) {
         // 更新 Store 的 UI 状态
@@ -211,7 +211,7 @@ function onNodeDragStop(e: NodeDragEvent) {
             store.moveMindMapNodeTo(node.id, store.dragTargetId, store.dragIntent)
         } else if (store.dragDetachId === node.id) {
             store.detachNode(node.id, node.position)
-        }else{
+        } else {
             store.updateNodePosition(node.id, node.position)
         }
     })

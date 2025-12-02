@@ -629,7 +629,7 @@ export const useCanvasStore = defineStore('canvas', () => {
     }
 
     // Store Action
-    function detachNode(id: string, position : XYPosition) {
+    function detachNode(id: string, position: XYPosition) {
         execute(draft => {
             const node = draft.nodes[id];
             if (!node) return; // 1. 防御性检查：节点是否存在

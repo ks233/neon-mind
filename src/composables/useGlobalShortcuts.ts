@@ -123,4 +123,9 @@ export function useGlobalShortcuts() {
             store.redo();
         }
     })
+
+    // debug 用
+    onKeyStroke(['d'], (e) => {
+        // console.log(getSelectedNodes.value.map(node=>node.id))
+    })
 }
