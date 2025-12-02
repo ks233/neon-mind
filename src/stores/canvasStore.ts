@@ -38,11 +38,13 @@ export const useCanvasStore = defineStore('canvas', () => {
 
     function execute(mutator: (draft: CanvasModel) => void, recordHistory = true) {
         if (recordHistory) {
-            console.trace("execute")
+            // console.trace("execute")
         }
+        let hasChange = false
         const nextState = produce(model.value, mutator,
             (patches, inversePatches) => {
-                if (recordHistory) {
+                if (recordHistory && patches.length > 0) {
+                    hasChange = true
                     // 记录补丁
                     historyStack.value.push({
                         undo: inversePatches,
@@ -54,11 +56,10 @@ export const useCanvasStore = defineStore('canvas', () => {
                 }
             });
 
-        // [关键] 更新状态：直接替换 .value
-        // Vue 会检测到 value 变了，触发响应式更新
-        // 由于 Immer 的结构共享，没变的部分引用一致，Vue 不会过度渲染
-        model.value = nextState;
-
+        if (hasChange) {
+            // 由于 Immer 的结构共享，没变的部分引用一致，Vue 不会过度渲染
+            model.value = nextState;
+        }
         // 触发视图同步 (位置、结构变化时)
         syncModelToView();
     }
@@ -512,6 +513,55 @@ export const useCanvasStore = defineStore('canvas', () => {
             }
         })
     }
+
+    function updateEdgesModel(viewEdges: Edge[]) {
+        // 找出所有非生成的线（即 id 不是 e-parent-child 格式的）
+        // 或者是我们在 createVisualNode 里标记过的
+        // console.log(toRaw(vueEdges.value))
+        console.trace()
+        execute(draft => {
+            const manualEdges = viewEdges.filter(e => !e.id.startsWith('em-'));
+
+            draft.edges = manualEdges.map(e => ({
+                id: e.id,
+                source: e.source,
+                target: e.target,
+
+                sourceHandle: e.sourceHandle ?? undefined,
+                targetHandle: e.targetHandle ?? undefined,
+                label: e.label
+            } as LogicEdge));
+        }, false)
+    }
+    function updateEdgeConnection(oldEdge: Edge, newConnection: Connection) {
+        execute((draft) => {
+            // 1. 在 model.edges (手动连线列表) 中查找该连线
+            const edge = draft.edges.find(e => e.id === oldEdge.id);
+
+            // 2. 如果找到了 (说明是手动连线)，更新它的属性
+            // 注意：思维导图的结构线不在 model.edges 里，所以不会被误修改，这是符合预期的
+            if (edge) {
+                edge.source = newConnection.source;
+                edge.target = newConnection.target;
+
+                // 更新具体的 Handle ID
+                // newConnection.sourceHandle 可能是 null/undefined，需要处理
+                edge.sourceHandle = newConnection.sourceHandle ?? undefined;
+                edge.targetHandle = newConnection.targetHandle ?? undefined;
+            }
+        });
+    }
+
+    // [新增] 删除连线 (用于选中连线按 Delete)
+    function removeEdge(edgeId: string) {
+        execute((draft) => {
+            const index = draft.edges.findIndex(e => e.id === edgeId);
+            if (index !== -1) {
+                draft.edges.splice(index, 1);
+            }
+        });
+    }
+
     //#endregion
 
     // #region 【UI -> 数据】移
@@ -607,28 +657,7 @@ export const useCanvasStore = defineStore('canvas', () => {
             }
         })
     }
-    // #endregion
 
-    // #region 【UI -> 数据】刷新
-    function updateEdgesModel(viewEdges: Edge[]) {
-        // 找出所有非生成的线（即 id 不是 e-parent-child 格式的）
-        // 或者是我们在 createVisualNode 里标记过的
-        execute(draft => {
-            const manualEdges = viewEdges.filter(e => !e.id.startsWith('e-'));
-
-            draft.edges = manualEdges.map(e => ({
-                id: e.id,
-                source: e.source,
-                target: e.target,
-
-                sourceHandle: e.sourceHandle ?? undefined,
-                targetHandle: e.targetHandle ?? undefined,
-                label: e.label
-            } as LogicEdge));
-        }, false)
-    }
-
-    // Store Action
     function detachNode(id: string, position: XYPosition) {
         execute(draft => {
             const node = draft.nodes[id];
@@ -662,8 +691,7 @@ export const useCanvasStore = defineStore('canvas', () => {
             node.y = position.y
         })
     }
-
-    //#endregion
+    // #endregion
 
     //#region 数据持久化
     async function saveToFile() {
@@ -726,8 +754,9 @@ export const useCanvasStore = defineStore('canvas', () => {
         updateNodeLink,
         updateNodeData,
         removeNodeFromModel,
-        updateEdgesModel,
         updateEdgeLabel,
+        updateEdgeConnection,
+        removeEdge,
         syncModelToView,
         moveMindMapNode,
         moveMindMapNodeTo,

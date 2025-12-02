@@ -97,25 +97,28 @@ export function useGlobalShortcuts() {
         }
     });
 
-    // 撤销 (Ctrl + Z)
-    onKeyStroke('z', (e) => {
-        if ((e.ctrlKey || e.metaKey) && !e.shiftKey) {
-            if (isInputActive()) return; // 编辑文字时交给 CodeMirror
 
-            e.preventDefault();
-            console.log('触发撤销');
-            store.undo();
+    // 撤销和重做 (Ctrl-Z、Ctrl-Shift-Z)
+    // 巨坑：一定要同时监听大写和小写，否则 shiftKey 始终为 false
+    onKeyStroke(['z', 'Z'], (e) => {
+        if ((e.ctrlKey || e.metaKey)) {
+            if (isInputActive()) return; // 编辑文字时交给 CodeMirror
+            if (!e.shiftKey) {
+                e.preventDefault();
+                console.log('触发撤销');
+                store.undo();
+            } else {
+                e.preventDefault();
+                console.log('触发重做');
+                store.redo();
+            }
         }
     })
 
-    // 重做 (Ctrl + Y 或 Ctrl + Shift + Z)
-    onKeyStroke(['y', 'z'], (e) => {
-        // Ctrl + Y
-        const isCtrlY = (e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'y';
-        // Ctrl + Shift + Z
-        const isCtrlShiftZ = (e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === 'z';
 
-        if (isCtrlY || isCtrlShiftZ) {
+    // 重做 (Ctrl-Y)
+    onKeyStroke(['y', 'Y'], (e) => {
+        if (e.ctrlKey || e.metaKey) {
             if (isInputActive()) return;
 
             e.preventDefault();
@@ -125,7 +128,9 @@ export function useGlobalShortcuts() {
     })
 
     // debug 用
-    onKeyStroke(['d'], (e) => {
-        // console.log(getSelectedNodes.value.map(node=>node.id))
+    onKeyStroke(['d', 'D'], (e) => {
+        console.log('ctrl', e.ctrlKey)
+        console.log('meta', e.metaKey)
+        console.log('shift', e.shiftKey)
     })
 }

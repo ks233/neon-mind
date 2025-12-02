@@ -111,7 +111,11 @@ function onNodesChange(changes: NodeChange[]) {
 }
 
 function onEdgesChange(changes: EdgeChange[]) {
-    nextTick(() => store.updateEdgesModel(getEdges.value))
+    changes.forEach(change =>{
+        if(change.type === 'remove'){
+            store.removeEdge(change.id)
+        }
+    })
 }
 
 // #endregion
@@ -133,17 +137,15 @@ function onEdgeUpdate({ edge, connection }: { edge: GraphEdge, connection: Conne
     // 并返回一个新的数组
     isUpdateSuccessful.value = true
     updateEdge(edge, connection)
-    nextTick(() => store.updateEdgesModel(getEdges.value))
+    store.updateEdgeConnection(edge, connection)
 }
 
 // 拖拽到空地时删除边
 function onEdgeUpdateEnd(params: EdgeMouseEvent) {
     const { edge } = params
     if (!isUpdateSuccessful.value) {
-        store.vueEdges = store.vueEdges.filter((e) => e.id !== edge.id)
-        nextTick(() => store.updateEdgesModel(getEdges.value))
+        store.removeEdge(edge.id)
     }
-
     // 重置状态（可选，为了保险）
     isUpdateSuccessful.value = false
 }

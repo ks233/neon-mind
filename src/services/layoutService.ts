@@ -208,7 +208,7 @@ function generateElements(root: LayoutNode, logicRoot: LogicNode) {
 
     if (node.parent) {
       resultEdges.push({
-        id: `e-${node.parent.data.id}-${node.data.id}`,
+        id: `em-${node.parent.data.id}-${node.data.id}`,
         source: node.parent.data.id,
         target: node.data.id,
         sourceHandle: 'right',
