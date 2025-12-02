@@ -24,7 +24,24 @@ import { resolveContentComponent } from '@/utils/contentResolver'
 import { snapToGrid } from '@/utils/grid'
 
 // === 状态管理 ===
-const isEditing = ref(false)
+const isEditing = computed({
+    // 读取：判断全局的"令牌"是不是在自己手里
+    get() {
+        return store.editingNodeId === id
+    },
+    // 写入：修改本地变量时，自动代理到 Store Action
+    set(val: boolean) {
+        if (val) {
+            store.startEditing(id)
+        } else {
+            // 只有当当前编辑的是自己时，才有权取消
+            // (防止某些边缘情况误关了别人的编辑态)
+            if (store.editingNodeId === id) {
+                store.stopEditing()
+            }
+        }
+    }
+})
 const containerRef = ref<HTMLElement | null>(null) // 用于测量尺寸
 
 // 计算当前是否被高亮 (拖拽反馈)
@@ -98,6 +115,25 @@ function onResizeEnd(evt: any) {
     store.updateNodeSize(id, { width: node.dimensions.width, height: node.dimensions.height })
 }
 
+function handleMouseDown(e: MouseEvent) {
+    // 1. 如果自己正在编辑，绝对不要拦截！
+    // 否则用户无法点击编辑器内部来移动光标或选中文本
+    if (isEditing.value) {
+        // e.stopPropagation(); // 可选：如果你不想让 Vue Flow 选中节点，可以加这行，但通常不需要
+        return;
+    }
+
+    // 2. [核心修复] 如果别人正在编辑，立刻帮他关闭！
+    // 因为我们下面要 preventDefault，浏览器不会自动 blur 那个节点，所以我们要手动通过 Store 关闭它
+    if (store.editingNodeId && store.editingNodeId !== id) {
+        store.stopEditing();
+    }
+
+    // 3. 阻止默认行为（防止当前节点获得 DOM 焦点，解决 Tab 乱跳问题）
+    // 这行代码必须保留
+    e.preventDefault();
+}
+
 </script>
 
 <template>
@@ -119,7 +155,7 @@ function onResizeEnd(evt: any) {
 
         @mouseenter="showDebug = true"
         @mouseleave="showDebug = false"
-        @mousedown.prevent>
+        @mousedown.prevent="handleMouseDown">
 
         <NodeResizer
             :is-visible="true"
@@ -156,7 +192,7 @@ function onResizeEnd(evt: any) {
                 <span> display: {{ (data.logicNode as ImagePayload).displaySrc }}</span><br>
                 <span> local: {{ (data.logicNode as ImagePayload).localSrc }}</span>
             </template>
-            <!-- {{ data }} -->
+            {{ data.logicNode.width }}
         </div>
     </div>
 </template>
@@ -173,7 +209,7 @@ function onResizeEnd(evt: any) {
     flex-direction: column;
     overflow: hidden;
     box-sizing: border-box;
-    transition: box-shadow 0.2s, border-color 0.2s;
+    transition: box-shadow 0.1s, border-color 0.1s;
 }
 
 /* === 模式 A: 自动大小 === */

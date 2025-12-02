@@ -38,21 +38,18 @@
 
     /* === 代码 (Code) === */
     --md-code-font: 'JetBrains Mono', 'Fira Code', monospace;
-    --md-code-bg: rgba(150, 150, 150, 0.15);
+    --md-code-bg: rgba(255, 255, 255, 0.1);
     --md-code-color: inherit;
     --md-code-radius: 4px;
 
     /* === 链接 (Link) === */
     --md-link-color: #1890ff;
     --md-link-decoration: underline;
+
+    /* 选区颜色 */
+    --md-selection-bg: rgba(165, 49, 49, 0.6);
 }
 
-/* 深色模式适配 (如果你的应用支持深色模式切换) */
-html.dark {
-    --md-quote-color: #999;
-    --md-quote-border: 3px solid #444;
-    --md-code-bg: rgba(255, 255, 255, 0.1);
-}
 
 
 .CodeMirror * {

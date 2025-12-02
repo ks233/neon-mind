@@ -26,7 +26,11 @@ export const baseTheme = EditorView.theme({
     },
     ".cm-lineWrapping": {
         padding: "0"
-    }
+    },
+    "&.cm-focused .cm-selectionBackground, ::selection": {
+        // 这里使用 淡蓝色 (Unity/VSCode 风格)
+        backgroundColor: "var(--md-selection-bg) !important",
+    },
 })
 
 // 2. 语法高亮 (映射到 CSS 变量)
@@ -72,5 +76,5 @@ export const markdownHighlighting = syntaxHighlighting(HighlightStyle.define([
     { tag: tags.link, color: "var(--md-link-color)", textDecoration: "var(--md-link-decoration)" },
 
     // 列表符号
-    { tag: tags.list}
+    { tag: tags.list }
 ]))

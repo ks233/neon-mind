@@ -31,6 +31,19 @@ export const useCanvasStore = defineStore('canvas', () => {
         edges: [] // 存储非树状结构的额外连线
     });
 
+
+    const editingNodeId = ref<string | null>(null);
+
+    // Action: 命令指定节点进入编辑
+    function startEditing(id: string) {
+        editingNodeId.value = id;
+    }
+
+    // Action: 退出编辑（或清理状态）
+    function stopEditing() {
+        editingNodeId.value = null;
+    }
+
     // #region 撤消重做
     // [!code focus] 历史栈改存 Patch 数组，而不是巨大的 JSON 字符串
     const historyStack = shallowRef<HistoryEntry[]>([]);
@@ -43,8 +56,8 @@ export const useCanvasStore = defineStore('canvas', () => {
         let hasChange = false
         const nextState = produce(model.value, mutator,
             (patches, inversePatches) => {
-                if (recordHistory && patches.length > 0) {
-                    hasChange = true
+                hasChange = patches.length > 0
+                if (recordHistory && hasChange) {
                     // 记录补丁
                     historyStack.value.push({
                         undo: inversePatches,
@@ -767,6 +780,10 @@ export const useCanvasStore = defineStore('canvas', () => {
         saveToFile,
         loadModel,
         // 撤销
-        undo, redo
+        undo, redo,
+        // editing
+        editingNodeId,
+        startEditing,
+        stopEditing
     };
 });

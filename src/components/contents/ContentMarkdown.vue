@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, watch, nextTick, computed, onBeforeUnmount } from 'vue'
+import { ref, watch, nextTick, computed, onBeforeUnmount, onMounted } from 'vue'
 import MarkdownIt from 'markdown-it'
 // CodeMirror 核心
 import { EditorView, keymap } from '@codemirror/view'
@@ -33,6 +33,7 @@ const editorRef = ref<HTMLElement | null>(null)
 let view: EditorView | null = null
 
 let initialContent = ''
+let currentContent = ''
 
 // 初始化编辑器
 function initEditor() {
@@ -42,8 +43,16 @@ function initEditor() {
         (binding) => binding.key !== 'Mod-i'
     )
     initialContent = props.data.content
+    currentContent = initialContent
+    // 如果不超过 20 字，进入编辑模式后全选
+    // 如果超过 20 字，进入编辑模式后
+    let selectionRange = { anchor: 0, head: initialContent.length }
+    if (initialContent.length > 20) {
+        selectionRange.anchor = initialContent.length
+    }
     const state = EditorState.create({
-        doc: props.data.content,
+        doc: initialContent,
+        selection: selectionRange,
         extensions: [
             history(),
             keymap.of([indentWithTab, ...filteredDefaultKeymap, ...historyKeymap]),
@@ -55,17 +64,14 @@ function initEditor() {
 
             // [核心修复 1] 监听失焦事件，实现"无法退出"的修复
             EditorView.updateListener.of((u) => {
+                const docString = u.state.doc.toString()
                 // 如果内容变了，同步数据
                 if (u.docChanged) {
-
+                    currentContent = docString
                 }
                 // 如果焦点丢失了 (blur)，通知父组件退出编辑
                 if (u.focusChanged && !u.view.hasFocus) {
                     emit('blur')
-                    const docString = u.state.doc.toString()
-                    if (docString !== initialContent) {
-                        emit('update:content', docString)
-                    }
                 }
             }),
             markdownKeymapExtension,
@@ -78,6 +84,10 @@ function initEditor() {
     })
 
     view.focus() // 创建后立即聚焦
+    // 防止聚焦被 VueFlow 抢走
+    setTimeout(() => {
+        if (view && !view.hasFocus) view.focus();
+    }, 10);
 }
 
 // 销毁编辑器
@@ -94,7 +104,19 @@ watch(() => props.isEditing, (val) => {
         nextTick(() => initEditor())
     } else {
         destroyEditor()
+        if (currentContent !== initialContent) {
+            emit('update:content', currentContent)
+        }
     }
+})
+
+onMounted(() => {
+    // 这里的 setTimeout(0) 是为了给 CSS transition / animation 留一点 buffer
+    // 或者是为了确保父级 v-if 产生的 DOM 布局完全稳定 (防止宽高计算错误)
+    // 但通常直接 initEditor() 也是稳的。为了极度稳定，可以用 requestAnimationFrame
+    requestAnimationFrame(() => {
+        initEditor()
+    })
 })
 
 // 组件卸载时兜底清理

@@ -5,6 +5,7 @@ import { isInputActive } from '@/utils/keyboard'
 import { GraphNode, isGraphNode, useVueFlow } from '@vue-flow/core'
 import { nextTick } from 'vue'
 import { PersistenceManager } from '@/services/persistence/PersistenceManager'
+import UniversalNode from '@/components/UniversalNode.vue'
 
 export function useGlobalShortcuts() {
     const store = useCanvasStore()
@@ -29,19 +30,27 @@ export function useGlobalShortcuts() {
             console.time('Batch Add Child');
             const newIds = await store.addMindMapChildBatch(targetIds);
             console.timeEnd('Batch Add Child');
-            // 2. [优雅的选中逻辑]
             if (newIds.length > 0) {
                 // 必须等待 Vue 将新数据渲染成 DOM/GraphNode
                 await nextTick();
 
                 // 清空旧选中
                 removeSelectedNodes(selectedNodes);
+                store.stopEditing();
 
                 // 查找新节点实例 (GraphNode)
                 const newGraphNodes = newIds
                     .map(id => findNode(id))
                     .filter((n): n is GraphNode => typeof n !== 'undefined'); // 过滤掉潜在的 undefined
 
+
+                if (newGraphNodes.length == 1) {
+                    // 能进入编辑模式但无法聚焦和全选
+                    store.startEditing(newGraphNodes[0].id)
+                    // 能用但丑陋
+                    // setTimeout(() => store.startEditing(newGraphNodes[0].id), 1);
+                }
+                
                 // 批量选中
                 addSelectedNodes(newGraphNodes);
             }
