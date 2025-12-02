@@ -141,7 +141,6 @@ async function onContentCommand(key: string) {
     if (key === 'Tab') {
         const newIds = await store.addMindMapChildBatch([id])
         if (newIds.length == 1) {
-            store.stopEditing();
             const newNode = findNode(newIds[0]) as GraphNode
             removeSelectedNodes([newNode])
             addSelectedNodes([newNode])
@@ -275,12 +274,6 @@ async function onContentCommand(key: string) {
     /* border-color: #1890ff; */
     box-shadow: 0 0 0 5px rgba(24, 144, 255, 0.5);
 }
-
-.universal-node.is-editing {
-    background-color: var(--node-bg-editing);
-    /* 限制最大宽度，超过自动换行 */
-}
-
 
 /* 根节点样式 */
 .universal-node.is-root {

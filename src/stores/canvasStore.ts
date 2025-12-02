@@ -49,7 +49,7 @@ export const useCanvasStore = defineStore('canvas', () => {
     const historyStack = shallowRef<HistoryEntry[]>([]);
     const futureStack = shallowRef<HistoryEntry[]>([]);
 
-    function execute(mutator: (draft: CanvasModel) => void, recordHistory = true) {
+    async function execute(mutator: (draft: CanvasModel) => void, recordHistory = true) {
         if (recordHistory) {
             // console.trace("execute")
         }
@@ -74,7 +74,7 @@ export const useCanvasStore = defineStore('canvas', () => {
             model.value = nextState;
         }
         // 触发视图同步 (位置、结构变化时)
-        syncModelToView();
+        await syncModelToView();
     }
 
     // === 撤销 ===

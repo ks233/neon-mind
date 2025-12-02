@@ -37,7 +37,6 @@ export function useGlobalShortcuts() {
                 // 清空旧选中
                 removeSelectedNodes(selectedNodes);
                 store.stopEditing();
-
                 // 查找新节点实例 (GraphNode)
                 const newGraphNodes = newIds
                     .map(id => findNode(id))
