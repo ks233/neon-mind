@@ -30,8 +30,6 @@ const showSelectedCount = computed(() => selectedNodes.value.length > 1)
 function setAutoSize() {
     store.updateNodesBatch(selectedIds.value, (node) => {
         node.fixedSize = false;
-        node.width = undefined;
-        node.height = undefined;
     });
 }
 

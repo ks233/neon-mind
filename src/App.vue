@@ -155,7 +155,7 @@ function onNodeDragStart(e: NodeDragEvent) {
 }
 
 // 1. 拖拽中 (Update Loop)
-const PROXY_SIZE = 20;
+const PROXY_SIZE = 30;
 
 function onNodeDrag(e: NodeDragEvent) {
     // 只处理单选拖拽，且拖拽的是思维导图节点
