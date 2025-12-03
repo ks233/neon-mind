@@ -11,6 +11,8 @@ import { languages } from '@codemirror/language-data'
 import { baseTheme, markdownHighlighting } from '@/config/editorTheme'
 import type { MarkdownPayload } from '@/types/model'
 import { markdownKeymapExtension } from '@/config/markdownCommands';
+import { useCanvasStore } from '@/stores/canvasStore'
+import { convertFileSrc } from '@tauri-apps/api/core'
 
 
 const props = defineProps<{
@@ -22,10 +24,61 @@ const props = defineProps<{
 const emit = defineEmits<{
     (e: 'update:content', val: string): void
     (e: 'blur'): void
+    (e: 'command', key: string): void
 }>()
 
 // === 1. 阅读模式逻辑 (MarkdownIt) ===
-const md = new MarkdownIt({ html: true, breaks: true })
+const md = new MarkdownIt({ html: true, breaks: true, linkify: true })
+
+// 保存默认的渲染函数
+const defaultImageRender = md.renderer.rules.image || function (tokens, idx, options, env, self) {
+    return self.renderToken(tokens, idx, options)
+}
+
+const store = useCanvasStore()
+
+md.renderer.rules.image = (tokens, idx, options, env, self) => {
+    const token = tokens[idx]
+    const srcIndex = token.attrIndex('src')
+
+    if (srcIndex >= 0) {
+        const src = token.attrs![srcIndex][1]
+        // 检查是否是相对路径 (以 ./ 或 ../ 开头，或者不包含 ://)
+        // 简单起见，我们主要处理 ./assets/ 这种情况
+        if (store.projectRoot && (src.startsWith('./') || src.startsWith('assets/'))) {
+            try {
+                // 1. 简单的路径清洗 (移除 ./)
+                const cleanRelPath = src.replace(/^\.\//, '')
+
+                // 2. 拼接绝对路径 (注意：这里在前端做简单的字符串拼接)
+                // 我们需要处理 Windows (\) 和 Unix (/) 的分隔符差异
+                // 但 convertFileSrc 对斜杠通常有很好的兼容性
+                const isWindows = navigator.userAgent.includes('Windows')
+                const sep = isWindows ? '\\' : '/'
+
+                // 简单拼接：Root + Sep + Relative
+                // 注意处理 projectRoot 末尾可能已有斜杠的情况
+                const root = store.projectRoot.endsWith(sep)
+                    ? store.projectRoot
+                    : store.projectRoot + sep
+
+                const absolutePath = root + cleanRelPath.replace(/\//g, sep)
+                // 3. 转换为 WebView 协议 (asset://)
+                const assetUrl = convertFileSrc(absolutePath)
+                console.log(absolutePath, assetUrl)
+                // 4. 覆写 src 属性
+                token.attrs![srcIndex][1] = assetUrl
+
+            } catch (e) {
+                console.error('Markdown image path resolve failed:', e)
+            }
+        }
+    }
+
+    // 调用默认渲染器生成 HTML
+    return defaultImageRender(tokens, idx, options, env, self)
+}
+
 const renderedHtml = computed(() => md.render(props.data.content || ''))
 
 // === 2. 编辑模式逻辑 (CodeMirror) ===
@@ -54,14 +107,12 @@ function initEditor() {
         doc: initialContent,
         selection: selectionRange,
         extensions: [
+            baseTheme,
+            markdownHighlighting,
             history(),
             keymap.of([indentWithTab, ...filteredDefaultKeymap, ...historyKeymap]),
             markdown({ base: markdownLanguage, codeLanguages: languages }),
             EditorView.lineWrapping, // 自动换行
-
-            baseTheme,
-            markdownHighlighting,
-
             EditorView.updateListener.of((u) => {
                 const docString = u.state.doc.toString()
                 // 如果内容变了，同步数据
@@ -299,6 +350,20 @@ function onKeyDownCapture(e: KeyboardEvent) {
 .markdown-body :deep(ol) {
     padding-left: 1.2em;
     /* margin: 0.6em 0; */
+}
+
+
+.markdown-body :deep(img) {
+    display: block;
+    pointer-events: none;
+
+    /* [!code focus:3] 核心修改 */
+    /* 限制最大宽高不超过父容器，防止撑破布局 */
+    max-width: 100%;
+    max-height: 300px;
+
+    /* 配合 object-fit (在 template 的 style 中设置) 使用，
+     这能保证图片既不超过容器，又能按需填充(cover)或完整显示(contain) */
 }
 
 /* ... 原有样式 ... */

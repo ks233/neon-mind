@@ -13,6 +13,7 @@ import { convertFileSrc } from '@tauri-apps/api/core';
 import { ProjectService } from '@/services/projectService';
 
 import { produce, applyPatches, enableMapSet, type Patch, enablePatches } from 'immer';
+import { getCurrentWindow } from '@tauri-apps/api/window';
 
 // 开启 Set/Map 支持 (你的 model 用到了 Set)
 enableMapSet();
@@ -35,6 +36,7 @@ export const useCanvasStore = defineStore('canvas', () => {
 
 
     // #region 全局数据
+
     const model = shallowRef<CanvasModel>({
         rootNodes: new Set(),
         nodes: {},
@@ -133,6 +135,19 @@ export const useCanvasStore = defineStore('canvas', () => {
 
     // #endregion
 
+
+    //#region 文件相关
+
+    // 当前工程的绝对路径 (例如 "D:/MyProjects/MindMap")
+    const projectRoot = ref<string | null>(null);
+
+    // Action: 设置工程路径 (在 PersistenceManager 打开/保存成功后调用)
+    async function setProjectRoot(path: string) {
+        projectRoot.value = path;
+        const title = `Mind Canvas - ${path}`;
+        await getCurrentWindow().setTitle(title);
+    }
+    //#endregion
 
     // #region 【数据 -> UI】刷新
 
@@ -890,6 +905,9 @@ export const useCanvasStore = defineStore('canvas', () => {
         startEditing,
         stopEditing,
         // 依赖注入
-        setFlowInstance
+        setFlowInstance,
+        // 项目文件
+        projectRoot,
+        setProjectRoot
     };
 });

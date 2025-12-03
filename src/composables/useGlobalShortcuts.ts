@@ -104,10 +104,12 @@ export function useGlobalShortcuts() {
     onKeyStroke('o', async (e) => {
         if (e.ctrlKey) {
             e.preventDefault();
-            const newModel = await PersistenceManager.openProject();
-            if (newModel) {
+            const result = await PersistenceManager.openProject();
+            if (result) {
+                const { model: loadedModel, projectRoot: rootPath } = result;
+                await store.setProjectRoot(rootPath);
                 // 清空并加载
-                store.loadModel(newModel);
+                store.loadModel(loadedModel);
             }
         }
     });

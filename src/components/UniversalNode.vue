@@ -200,9 +200,9 @@ async function onContentCommand(key: string) {
                 :is-editing="isEditing"
                 @blur="isEditing = false"
                 @command="onContentCommand"
-                @update:content="(v) => handleUpdate('content', v)"
-                @update:url="(v) => handleUpdate('url', v)"
-                @update:ratio="(v) => handleUpdate('ratio', v)" />
+                @update:content="(v: any) => handleUpdate('content', v)"
+                @update:url="(v: any) => handleUpdate('url', v)"
+                @update:ratio="(v: any) => handleUpdate('ratio', v)" />
         </div>
 
         <div v-show="showDebug" class="debug-info">
