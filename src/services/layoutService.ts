@@ -197,14 +197,16 @@ function generateElements(root: LayoutNode, logicRoot: LogicNode) {
     const startX = logicRoot.x || 0;
     const startY = logicRoot.y || 0;
 
+    const treeRootId = logicRoot.id;
+
     // 简单的递归遍历收集结果
-    function traverse(node: LayoutNode) {
+    function traverse(node: LayoutNode, currentDepth: number) {
         // 现在的 node.x / node.y 已经是相对于根节点的 Top-Left 坐标了
         // 直接加上全局偏移即可，不需要烧脑的中心点换算！
         const finalX = startX + node.x;
         const finalY = ceilToGrid(startY + node.y);
 
-        resultNodes.push(createVisualNode(node.data, { x: finalX, y: finalY }));
+        resultNodes.push(createVisualNode(node.data, { x: finalX, y: finalY }, currentDepth, treeRootId));
 
         if (node.parent) {
             resultEdges.push({
@@ -221,10 +223,10 @@ function generateElements(root: LayoutNode, logicRoot: LogicNode) {
             });
         }
 
-        node.children.forEach(traverse);
+        node.children.forEach(child => traverse(child, currentDepth + 1));
     }
 
-    traverse(root);
+    traverse(root, 0);
 
     return { nodes: resultNodes, edges: resultEdges };
 }

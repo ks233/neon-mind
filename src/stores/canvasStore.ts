@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia';
 import { nextTick, reactive, ref, shallowRef, toRaw } from 'vue';
 import type { CanvasModel, LogicNode, LogicEdge, MarkdownPayload, ImagePayload, LinkPayload } from '../types/model';
-import type { Node, Edge, XYPosition, Connection, GraphNode } from '@vue-flow/core';
+import type { Node, Edge, XYPosition, Connection, GraphNode, VueFlowStore } from '@vue-flow/core';
 import { MarkerType, useVueFlow } from '@vue-flow/core';
 
 import { computeMindMapLayout } from '@/services/layoutService';
@@ -24,6 +24,16 @@ interface HistoryEntry {
 }
 
 export const useCanvasStore = defineStore('canvas', () => {
+
+    //#region useVueFlow() 依赖注入
+    const flowInstance = shallowRef<VueFlowStore | null>(null);
+
+    function setFlowInstance(instance: VueFlowStore) {
+        flowInstance.value = instance;
+    }
+    //#endregion
+
+
     // #region 全局数据
     const model = shallowRef<CanvasModel>({
         rootNodes: new Set(),
@@ -293,6 +303,7 @@ export const useCanvasStore = defineStore('canvas', () => {
             draft.rootNodes.add(id);
         })
         startEditing(id)
+        selectNode(id)
         return id;
     }
 
@@ -386,35 +397,127 @@ export const useCanvasStore = defineStore('canvas', () => {
 
     // #region 【UI -> 数据】删
 
-    // 5. 递归删除节点
-    async function removeNodeFromModel(id: string) {
-        await execute(draft => {
-            const node = draft.nodes[id];
-            if (!node) return;
+    // [新增] 辅助函数：计算下一个要选中的节点 ID
+    // 优先级：上方兄弟 > 下方兄弟 > 父节点
+    function getNextFocusId(targetId: string): string | undefined {
+        const node = model.value.nodes[targetId];
+        if (!node) return undefined;
 
-            // A. 递归删除所有子节点 (针对思维导图)
-            if (node.childrenIds && node.childrenIds.length > 0) {
-                // 复制一份数组防止遍历时修改
-                [...node.childrenIds].forEach(childId => removeNodeFromModel(childId));
+        let siblings: string[] = [];
+        let parentId: string | undefined;
+
+        // 1. 获取兄弟列表
+        if (node.parentId) {
+            const parent = model.value.nodes[node.parentId];
+            if (parent) {
+                siblings = parent.childrenIds;
+                parentId = node.parentId;
             }
+        } else {
+            // 如果是根节点，在根节点列表中找兄弟
+            // 假设 rootNodes 已经转回 Array，如果是 Set 需要 Array.from
+            siblings = Array.from(model.value.rootNodes);
+        }
 
-            // B. 处理父级引用
-            if (node.parentId) {
-                const parent = draft.nodes[node.parentId];
-                if (parent) {
-                    parent.childrenIds = parent.childrenIds.filter(cid => cid !== id);
-                }
+        // 2. 查找当前位置
+        const index = siblings.indexOf(targetId);
+        if (index === -1) return parentId; // 异常情况回退到父级
+
+        // 3. 按优先级判断
+        // A. 上方节点 (Previous Sibling)
+        if (index > 0) {
+            return siblings[index - 1];
+        }
+
+        // B. 下方节点 (Next Sibling)
+        if (index < siblings.length - 1) {
+            return siblings[index + 1];
+        }
+
+        // C. 父节点 (Parent)
+        // 如果是独生子，删除后选中父节点
+        return parentId;
+    }
+
+    // [修改] 删除选中节点的 Action
+    function deleteSelectedNodes() {
+        // 1. 获取当前选中的 ID
+        // 注意：这里要在删除前获取，因为删了就找不到了
+        const instance = flowInstance.value;
+        if (!instance) return; // 防御性检查
+        const selected = instance.getSelectedNodes.value;
+        const selectedIds = selected.map(n => n.id);
+
+        if (selectedIds.length === 0) return;
+
+        // 2. 计算"继承者" (仅当删除单个节点时生效)
+        let nextIdToSelect: string | undefined;
+        if (selectedIds.length === 1) {
+            nextIdToSelect = getNextFocusId(selectedIds[0]);
+        }
+
+        // 3. 执行批量删除 (包裹在事务中)
+        execute((draft) => {
+            selectedIds.forEach(id => {
+                // 注意：这里要传 draft 进去，不能直接调外部函数
+                // 或者把 recursiveDelete 逻辑内联进来
+                recursiveDelete(draft, id);
+            });
+        });
+
+        // 4. [关键] 删除完成后，选中继承者
+        if (nextIdToSelect) {
+            // 需要等待 syncModelToView 完成 (execute 内部通常会调用)
+            // 如果 execute 是 async 的，记得 await
+            // 这里的 selectNode 会自动处理 nextTick 等待
+            selectNode(nextIdToSelect);
+        }
+    }
+
+    function selectNode(id: string) {
+        const instance = flowInstance.value;
+        if (!instance) return; // 防御性检查
+
+        // 现在你可以调用任何 Vue Flow 的方法了
+        const node = instance.findNode(id);
+        if (node) {
+            instance.addSelectedNodes([node]);
+        }
+    }
+
+    // 辅助：递归删除逻辑 (适配 Immer draft)
+    function recursiveDelete(draft: CanvasModel, id: string) {
+        const node = draft.nodes[id];
+        if (!node) return;
+
+        // A. 删子孙
+        if (node.childrenIds) {
+            [...node.childrenIds].forEach(childId => recursiveDelete(draft, childId));
+        }
+
+        // B. 删父级引用
+        if (node.parentId) {
+            const parent = draft.nodes[node.parentId];
+            if (parent) {
+                const idx = parent.childrenIds.indexOf(id);
+                if (idx !== -1) parent.childrenIds.splice(idx, 1);
             }
+        } else {
+            // 删根索引
+            // 兼容 Array 或 Set
+            if (Array.isArray(draft.rootNodes)) {
+                const idx = draft.rootNodes.indexOf(id);
+                if (idx !== -1) draft.rootNodes.splice(idx, 1);
+            } else {
+                (draft.rootNodes as Set<string>).delete(id);
+            }
+        }
 
-            // C. 处理 Root 列表引用
-            draft.rootNodes.delete(id);
+        // C. 删本体
+        delete draft.nodes[id];
 
-            // D. 处理游离连线引用
-            draft.edges = draft.edges.filter(e => e.source !== id && e.target !== id);
-
-            // E. 物理删除
-            delete draft.nodes[id];
-        })
+        // D. 删连线 (手动连线)
+        draft.edges = draft.edges.filter(e => e.source !== id && e.target !== id);
     }
 
     //#endregion
@@ -543,25 +646,6 @@ export const useCanvasStore = defineStore('canvas', () => {
         })
     }
 
-    function updateEdgesModel(viewEdges: Edge[]) {
-        // 找出所有非生成的线（即 id 不是 e-parent-child 格式的）
-        // 或者是我们在 createVisualNode 里标记过的
-        // console.log(toRaw(vueEdges.value))
-        console.trace()
-        execute(draft => {
-            const manualEdges = viewEdges.filter(e => !e.id.startsWith('em-'));
-
-            draft.edges = manualEdges.map(e => ({
-                id: e.id,
-                source: e.source,
-                target: e.target,
-
-                sourceHandle: e.sourceHandle ?? undefined,
-                targetHandle: e.targetHandle ?? undefined,
-                label: e.label
-            } as LogicEdge));
-        }, false)
-    }
     function updateEdgeConnection(oldEdge: Edge, newConnection: Connection) {
         execute((draft) => {
             // 1. 在 model.edges (手动连线列表) 中查找该连线
@@ -620,6 +704,7 @@ export const useCanvasStore = defineStore('canvas', () => {
     }
 
     function moveMindMapNodeTo(sourceId: string, targetId: string, type: 'child' | 'above' | 'below') {
+        let success = false
         execute(draft => {
             // 1. 基本校验
             if (sourceId === targetId) return; // 不能拖给自己
@@ -684,7 +769,9 @@ export const useCanvasStore = defineStore('canvas', () => {
                     newParent.childrenIds.push(sourceId); // 防御性
                 }
             }
+            success = true
         })
+        return success
     }
 
     function detachNode(id: string, position: XYPosition) {
@@ -783,7 +870,7 @@ export const useCanvasStore = defineStore('canvas', () => {
         updateNodeContent,
         updateNodeLink,
         updateNodeData,
-        removeNodeFromModel,
+        deleteSelectedNodes,
         updateEdgeLabel,
         updateEdgeConnection,
         removeEdge,
@@ -801,6 +888,8 @@ export const useCanvasStore = defineStore('canvas', () => {
         // editing
         editingNodeId,
         startEditing,
-        stopEditing
+        stopEditing,
+        // 依赖注入
+        setFlowInstance
     };
 });

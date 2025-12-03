@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, markRaw, nextTick } from 'vue'
 import { VueFlow, useVueFlow, SelectionMode } from '@vue-flow/core'
-import type { Connection, NodeTypesObject, Node, Edge, GraphEdge, EdgeMouseEvent, NodeRemoveChange, NodeDragEvent, NodeChange, EdgeChange, GraphNode } from '@vue-flow/core'
+import type { Connection, NodeTypesObject, Node, Edge, GraphEdge, EdgeMouseEvent, NodeRemoveChange, NodeDragEvent, NodeChange, EdgeChange, GraphNode, Rect } from '@vue-flow/core'
 import { Background } from '@vue-flow/background'
 import { Controls } from '@vue-flow/controls'
 
@@ -102,16 +102,6 @@ function onConnect(params: Connection) {
     store.createConnection(params)
 }
 
-// 当用户按 Delete 键时，Vue Flow 会先更新视图，然后触发这个回调
-function onNodesChange(changes: NodeChange[]) {
-    changes.forEach((change) => {
-        if (change.type === 'remove') {
-            console.log('检测到节点删除:', change.id)
-            store.removeNodeFromModel(change.id)
-        }
-    })
-}
-
 function onEdgesChange(changes: EdgeChange[]) {
     changes.forEach(change => {
         if (change.type === 'remove') {
@@ -163,7 +153,10 @@ const dragStartPos = ref({ x: 0, y: 0 })
 function onNodeDragStart(e: NodeDragEvent) {
     dragStartPos.value = { x: e.node.position.x, y: e.node.position.y }
 }
+
 // 1. 拖拽中 (Update Loop)
+const PROXY_SIZE = 20;
+
 function onNodeDrag(e: NodeDragEvent) {
     // 只处理单选拖拽，且拖拽的是思维导图节点
     const draggedNode = e.node
@@ -171,9 +164,21 @@ function onNodeDrag(e: NodeDragEvent) {
 
     const logicNode = store.model.nodes[draggedId]
 
+    const mouseEvent = e.event as MouseEvent;
+    const { x: mouseX, y: mouseY } = screenToFlowCoordinate({
+        x: mouseEvent.clientX,
+        y: mouseEvent.clientY
+    });
+    const proxyRect : Rect = {
+        x: mouseX - PROXY_SIZE / 2,
+        y: mouseY - PROXY_SIZE / 2,
+        width: PROXY_SIZE,
+        height: PROXY_SIZE,
+    };
+
     // 获取所有与拖拽节点发生碰撞的节点
     // getIntersectingNodes 类似于 Unity Physics.OverlapBox
-    const intersections = getIntersectingNodes(draggedNode)
+    const intersections = getIntersectingNodes(proxyRect, true)
 
     // 过滤：只关心思维导图节点，且忽略自己和自己的子孙(可选，store里有校验)
     const targetNode = intersections.find(n => n.id !== draggedNode.id && n.id !== 'world-origin')
@@ -181,12 +186,14 @@ function onNodeDrag(e: NodeDragEvent) {
     if (targetNode) {
         // 更新 Store 的 UI 状态
         store.dragTargetId = targetNode.id
-        store.dragIntent = calculateIntent(draggedNode, targetNode)
+        store.dragIntent = calculateIntentByMouse(mouseY, targetNode)
         store.dragDetachId = null
     } else {
         store.dragTargetId = null
         store.dragIntent = null
     }
+
+    // 断线
     const parentNode = findNode(logicNode.parentId)
     if (parentNode) {
         const dx = draggedNode.position.x - dragStartPos.value.x
@@ -212,7 +219,9 @@ function onNodeDragStop(e: NodeDragEvent) {
         if (store.dragTargetId && store.dragIntent) {
             console.log(`Moving ${draggedNode.id} -> ${store.dragTargetId} (${store.dragIntent})`)
             // 调用 Store 执行逻辑
-            store.moveMindMapNodeTo(node.id, store.dragTargetId, store.dragIntent)
+            if (!store.moveMindMapNodeTo(node.id, store.dragTargetId, store.dragIntent)) {
+                store.updateNodePosition(node.id, node.position)
+            }
         } else if (store.dragDetachId === node.id) {
             store.detachNode(node.id, node.position)
         } else {
@@ -226,24 +235,24 @@ function onNodeDragStop(e: NodeDragEvent) {
     dragStartPos.value = { x: 0, y: 0 }
 }
 
-// 辅助：计算意图 (简单的 AABB 区域判断)
-function calculateIntent(source: GraphNode, target: GraphNode): 'child' | 'above' | 'below' {
-    // 我们比较 source 的中心点 和 target 的 Geometry
-    const sourceCenterY = source.position.y + (source.dimensions.height || 0) / 2
+function calculateIntentByMouse(mouseY: number, target: GraphNode): 'child' | 'above' | 'below' {
+    // 获取目标节点的几何信息
+    // computedPosition 是绝对坐标，必须用这个
+    const targetY = target.computedPosition.y;
+    const targetHeight = target.dimensions.height || 40;
 
-    const targetTop = target.position.y
-    const targetHeight = target.dimensions.height || 0
-    const targetBottom = targetTop + targetHeight
+    // 定义感应区：
+    // 上部 25% -> 插入上方
+    // 下部 25% -> 插入下方
+    // 中间 50% -> 成为子节点
+    const zoneHeight = targetHeight * 0.25;
 
-    // 定义阈值：上下 25% 区域用于排序，中间 50% 用于成为子节点
-    const zoneHeight = targetHeight * 0.25
-
-    if (sourceCenterY < targetTop + zoneHeight) {
-        return 'above' // 命中顶部
-    } else if (sourceCenterY > targetBottom - zoneHeight) {
-        return 'below' // 命中底部
+    if (mouseY < targetY + zoneHeight) {
+        return 'above';
+    } else if (mouseY > targetY + targetHeight - zoneHeight) {
+        return 'below';
     } else {
-        return 'child' // 命中中心
+        return 'child';
     }
 }
 // #endregion
@@ -267,6 +276,11 @@ function onEdgeDoubleClick(e: EdgeMouseEvent) {
         }
     }
 }
+
+function onPaneReadyHandler(instance: any) {
+    console.log('VueFlow Pane Ready')
+    store.setFlowInstance(instance)
+}
 </script>
 
 <template>
@@ -276,6 +290,7 @@ function onEdgeDoubleClick(e: EdgeMouseEvent) {
     <div class="app-container"
         @contextmenu.prevent>
         <VueFlow v-if="true"
+            @pane-ready="onPaneReadyHandler"
             v-model:nodes="store.vueNodes"
             v-model:edges="store.vueEdges"
             :node-types="nodeTypes"
@@ -283,7 +298,6 @@ function onEdgeDoubleClick(e: EdgeMouseEvent) {
             :zoom-on-double-click="false"
             :fit-view-on-init="false"
             @connect="onConnect"
-            :delete-key-code="['Delete']"
             :pan-on-drag="[1, 2]"
             :selection-key-code="true"
             multi-selection-key-code="Control"
@@ -302,7 +316,6 @@ function onEdgeDoubleClick(e: EdgeMouseEvent) {
             @node-drag-start="onNodeDragStart"
             @node-drag="onNodeDrag"
             @node-drag-stop="onNodeDragStop"
-            @nodes-change="onNodesChange"
             @edges-change="onEdgesChange"
             @edge-double-click="onEdgeDoubleClick"
             :only-render-visible-elements="false"

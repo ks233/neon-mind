@@ -251,7 +251,7 @@ async function onContentCommand(key: string) {
 }
 
 .universal-node.dragging {
-    opacity: 0.8;
+    opacity: 0.4;
 }
 
 .universal-node.is-detaching {

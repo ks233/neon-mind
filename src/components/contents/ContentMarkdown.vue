@@ -122,17 +122,23 @@ onMounted(() => {
 onBeforeUnmount(() => destroyEditor())
 
 function onKeyDownCapture(e: KeyboardEvent) {
+    if (e.key === 'Escape') {
+        emit('blur')
+    }
     // 仅在自动大小模式下拦截 Tab 和 Enter
     if (!props.fixedSize) {
         if (e.key === 'Tab' || e.key === 'Enter') {
-            if(e.key === 'Enter' && e.shiftKey) return
+            if (e.key === 'Enter' && e.shiftKey) return
             // 1. 阻止 CodeMirror 接收此事件 (防止缩进/换行)
             e.stopPropagation()
             // 2. 阻止浏览器默认行为 (防止焦点切换)
             e.preventDefault()
-
             // 3. 通知父组件办事
             emit('command', e.key)
+        }
+    } else {
+        if (e.key === 'Enter' && e.ctrlKey) {
+            emit('blur')
         }
     }
     // 其他按键（如打字）放行给 CodeMirror
@@ -302,28 +308,31 @@ function onKeyDownCapture(e: KeyboardEvent) {
 /* 1. 定义滚动条的整体尺寸 */
 .md-wrapper::-webkit-scrollbar,
 :deep(.cm-scroller)::-webkit-scrollbar {
-  width: 6px;  /* 纵向滚动条宽度 */
-  height: 6px; /* 横向滚动条高度 */
+    width: 6px;
+    /* 纵向滚动条宽度 */
+    height: 6px;
+    /* 横向滚动条高度 */
 }
 
 /* 2. 定义滚动条轨道 (Track) - 通常设为透明 */
 .md-wrapper::-webkit-scrollbar-track,
 :deep(.cm-scroller)::-webkit-scrollbar-track {
-  background: transparent;
+    background: transparent;
 }
 
 /* 3. 定义滑块 (Thumb) - 核心样式 */
 .md-wrapper::-webkit-scrollbar-thumb,
 :deep(.cm-scroller)::-webkit-scrollbar-thumb {
-  /* 使用半透明灰色，这样在深色/浅色模式下都能看清 */
-  background-color: rgba(150, 150, 150, 0.3);
-  border-radius: 4px; /* 圆角 */
+    /* 使用半透明灰色，这样在深色/浅色模式下都能看清 */
+    background-color: rgba(150, 150, 150, 0.3);
+    border-radius: 4px;
+    /* 圆角 */
 }
 
 /* 4. 鼠标悬停在滑块上时加深颜色 */
 .md-wrapper::-webkit-scrollbar-thumb:hover,
 :deep(.cm-scroller)::-webkit-scrollbar-thumb:hover {
-  background-color: rgba(150, 150, 150, 0.6);
+    background-color: rgba(150, 150, 150, 0.6);
 }
 
 /* 5. (可选) 只有在鼠标悬停在容器上时才显示滚动条 */
