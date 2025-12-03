@@ -311,7 +311,7 @@ export const useCanvasStore = defineStore('canvas', () => {
                     id: newId,
                     structure: 'node',
                     contentType: 'markdown',
-                    content: 'Child Node',
+                    content: 'Child node',
                     x: 0, y: 0,
                     width: NODE_CONSTANTS.MIN_WIDTH,
                     height: NODE_CONSTANTS.MIN_HEIGHT,
@@ -728,7 +728,7 @@ export const useCanvasStore = defineStore('canvas', () => {
     }
 
     async function loadModel(loadedModel: CanvasModel) {
-        execute(
+        await execute(
             draft => {
                 if (loadedModel) {
                     // [核心] 全量替换当前数据

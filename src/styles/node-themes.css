@@ -1,10 +1,6 @@
 /* src/styles/node-themes.css */
 
-/* 1. 默认 (白) */
-
-.theme-default {
-
-}
+/* 1. 默认 */
 
 /* 2. 红 */
 .theme-red {
@@ -27,8 +23,8 @@
 
 /* 5. 蓝 */
 .theme-blue {
-    --border-color: #4da6ff;
-    --node-bg: #102b3f;
+    --border-color: #3ab4b4;
+    --node-bg: #113546;
 }
 
 /* 6. 深色 (Dark) */
