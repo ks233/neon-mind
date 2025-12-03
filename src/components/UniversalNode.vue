@@ -208,12 +208,12 @@ async function onContentCommand(key: string) {
         <div v-show="showDebug" class="debug-info">
             <span>({{ Math.round(position.x) }}, {{ Math.round(position.y || 0) }}) </span>
             <span>({{ Math.round(dimensions.width) }}, {{ Math.round(dimensions.height || 0) }}) </span>
-            <span style="color: #ff4d4f">{{ id.substring(0, 8) }}</span><br>
+            <span>{{ id.substring(0, 8) }}</span><br>
             <template v-if="data.logicNode.contentType == 'image'">
                 <span> display: {{ (data.logicNode as ImagePayload).displaySrc }}</span><br>
                 <span> local: {{ (data.logicNode as ImagePayload).localSrc }}</span>
             </template>
-            {{ data.logicNode.width }}
+            <!-- {{ data.logicNode.width }} -->
         </div>
     </div>
 </template>
@@ -272,7 +272,12 @@ async function onContentCommand(key: string) {
 /* 选中状态 */
 .universal-node.selected {
     /* border-color: #1890ff; */
-    box-shadow: 0 0 0 5px rgba(24, 144, 255, 0.5);
+    box-shadow: 0 0 0 3px var(--border-color);
+}
+
+.universal-node.is-editing {
+    /* border-color: #1890ff; */
+    box-shadow: 0 0 0 5px var(--border-color);
 }
 
 /* 根节点样式 */
@@ -283,7 +288,7 @@ async function onContentCommand(key: string) {
 
 .dark .universal-node.is-root {
     /* background: #111d2c; */
-    border-color: #177ddc;
+    /* border-color: #177ddc; */
 }
 
 /* Handle 样式 */
@@ -381,11 +386,11 @@ async function onContentCommand(key: string) {
 .debug-info {
     position: absolute;
     /* 向上偏移，数值等于标签高度 + 间距 */
-    top: -26px;
+    top: -18px;
     left: 0;
     /* 样式美化 */
-    background: rgba(0, 0, 0, 0.85);
-    color: #00ff9d;
+    /* background: rgba(0, 0, 0, 0.85); */
+    color: #ffffff5d;
     /* Matrix Green */
     padding: 4px 8px;
     border-radius: 4px;
@@ -400,6 +405,6 @@ async function onContentCommand(key: string) {
     /* 确保浮在所有东西上面 */
 
     /* 可选：加个小阴影 */
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+    /* box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2); */
 }
 </style>

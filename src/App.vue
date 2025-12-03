@@ -11,13 +11,14 @@ import '@vue-flow/core/dist/theme-default.css'
 import '@vue-flow/controls/dist/style.css'
 
 import OriginNode from '@/components/OriginNode.vue'
+import UniversalNode from '@/components/UniversalNode.vue'
+import SelectionToolbar from '@/components/canvas/SelectionToolbar.vue'
 
 import { useCanvasStore } from '@/stores/canvasStore'
 
 import { useDark, useToggle } from '@vueuse/core'
 
 import { snapToGrid } from '@/utils/grid'
-import UniversalNode from '@/components/UniversalNode.vue'
 import { useGlobalInteractions } from './composables/useGlobalInteractions'
 import { useGlobalShortcuts } from './composables/useGlobalShortcuts'
 
@@ -287,8 +288,8 @@ function onEdgeDoubleClick(e: EdgeMouseEvent) {
             :selection-key-code="true"
             multi-selection-key-code="Control"
             :default-edge-options="{
-                type: 'default',
-                style: { strokeWidth: 2, color: edgeColor },
+                type: 'smoothstep',
+                style: { strokeWidth: 2, color: edgeColor, 'font-size': 20 },
                 interactionWidth: 50,
             }"
             :max-zoom="4"
@@ -310,6 +311,7 @@ function onEdgeDoubleClick(e: EdgeMouseEvent) {
             <Background variant="dots" :gap="gridSize" :color="gridColor" :size="2" :offset="[20, 20]" />
             <!-- <Controls /> -->
         </VueFlow>
+        <SelectionToolbar />
 
         <div class="debug-panel">
             <div class="debug-row">

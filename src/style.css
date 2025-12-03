@@ -20,9 +20,10 @@ html.dark {
     --bg-color: #1f2022;
     --node-bg: #1c2127;
     --text-color: #ececec;
-    --border-color: #3f8caa;
+    --border-color: #3e93d8;
     --grid-color: #3a3a3a;
     --line-color: #666;
+    --mindmap-line-color: #177ddc;
     --handle-color: #444444;
 }
 

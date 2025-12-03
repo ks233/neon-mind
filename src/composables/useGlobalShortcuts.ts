@@ -5,7 +5,6 @@ import { isInputActive } from '@/utils/keyboard'
 import { GraphNode, isGraphNode, useVueFlow } from '@vue-flow/core'
 import { nextTick } from 'vue'
 import { PersistenceManager } from '@/services/persistence/PersistenceManager'
-import UniversalNode from '@/components/UniversalNode.vue'
 
 export function useGlobalShortcuts() {
     const store = useCanvasStore()

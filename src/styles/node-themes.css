@@ -1,0 +1,41 @@
+/* src/styles/node-themes.css */
+
+/* 1. 默认 (白) */
+
+.theme-default {
+
+}
+
+/* 2. 红 */
+.theme-red {
+    /* --node-bg: #ffcccc; */
+    --border-color: #e94141;
+    --node-bg: #311c1c;
+}
+
+/* 3. 黄 */
+.theme-yellow {
+    --border-color: #f5d65a;
+    --node-bg: #382f21;
+}
+
+/* 4. 绿 */
+.theme-green {
+    --border-color: #85c25c;
+    --node-bg: #1f2c19;
+}
+
+/* 5. 蓝 */
+.theme-blue {
+    --border-color: #4da6ff;
+    --node-bg: #102b3f;
+}
+
+/* 6. 深色 (Dark) */
+.theme-purple {
+    --border-color: #ac56e6;
+    --node-bg: #2a1f38;
+}
+
+/* 确保这些类能覆盖全局样式 */
+/* 如果 UniversalNode.vue 里没有用 scoped 锁定变量定义，这里通常直接生效 */

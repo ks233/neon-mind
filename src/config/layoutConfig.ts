@@ -3,6 +3,7 @@
 export const NODE_CONSTANTS = {
     // 必须与 MindMapNode.vue 里的 CSS min-width 保持一致
     MIN_WIDTH: 100,
+    MAX_WIDTH: 400,
     // 必须与 CSS 的 line-height + padding 计算结果一致
     MIN_HEIGHT: 40,
 

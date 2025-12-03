@@ -29,6 +29,8 @@ interface BaseNode {
   
   parentId?: string;
   childrenIds: string[];
+
+  class?: string; // CSS 样式
 }
 
 // 具体的内容数据接口

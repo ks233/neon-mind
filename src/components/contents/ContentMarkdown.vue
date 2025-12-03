@@ -45,7 +45,7 @@ function initEditor() {
     initialContent = props.data.content
     currentContent = initialContent
     // 如果不超过 20 字，进入编辑模式后全选
-    // 如果超过 20 字，进入编辑模式后
+    // 如果超过 20 字，进入编辑模式后光标位于末尾
     let selectionRange = { anchor: 0, head: initialContent.length }
     if (initialContent.length > 20) {
         selectionRange.anchor = initialContent.length
@@ -62,7 +62,6 @@ function initEditor() {
             baseTheme,
             markdownHighlighting,
 
-            // [核心修复 1] 监听失焦事件，实现"无法退出"的修复
             EditorView.updateListener.of((u) => {
                 const docString = u.state.doc.toString()
                 // 如果内容变了，同步数据
@@ -126,6 +125,7 @@ function onKeyDownCapture(e: KeyboardEvent) {
     // 仅在自动大小模式下拦截 Tab 和 Enter
     if (!props.fixedSize) {
         if (e.key === 'Tab' || e.key === 'Enter') {
+            if(e.key === 'Enter' && e.shiftKey) return
             // 1. 阻止 CodeMirror 接收此事件 (防止缩进/换行)
             e.stopPropagation()
             // 2. 阻止浏览器默认行为 (防止焦点切换)

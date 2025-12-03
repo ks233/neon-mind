@@ -21,5 +21,6 @@ export function createVisualNode(logic: LogicNode, computedPos?: XYPosition): No
         },
         // [!code focus] 应用修改后的样式逻辑
         style: sizeStyle,
+        class: logic.class ?? 'theme-default'
     };
 }

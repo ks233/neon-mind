@@ -147,7 +147,7 @@ export const useCanvasStore = defineStore('canvas', () => {
 
                 style: { stroke: '#b1b1b7', strokeWidth: 2 },
                 // 增加 label 样式 (可选)
-                labelStyle: { fill: '#888', fontWeight: 600, fontSize: 12 },
+                labelStyle: { fill: 'var(--text-color)', fontWeight: 600, fontSize: 18 },
                 labelBgStyle: { fill: 'var(--bg-color)', fillOpacity: 0.8 },
 
                 // [!code focus:2] 样式：添加箭头
@@ -311,13 +311,14 @@ export const useCanvasStore = defineStore('canvas', () => {
                     id: newId,
                     structure: 'node',
                     contentType: 'markdown',
-                    content: '子主题',
+                    content: 'Child Node',
                     x: 0, y: 0,
                     width: NODE_CONSTANTS.MIN_WIDTH,
                     height: NODE_CONSTANTS.MIN_HEIGHT,
                     fixedSize: false,
                     parentId: parentId,
-                    childrenIds: []
+                    childrenIds: [],
+                    class: parent.class
                 };
 
                 draft.nodes[newId] = newNode;
@@ -358,7 +359,8 @@ export const useCanvasStore = defineStore('canvas', () => {
                     fixedSize: false,
                     width: NODE_CONSTANTS.MIN_WIDTH,
                     height: NODE_CONSTANTS.MIN_HEIGHT,
-                    childrenIds: []
+                    childrenIds: [],
+                    class: parent.class
                 };
 
                 // 更新 Model
@@ -418,6 +420,19 @@ export const useCanvasStore = defineStore('canvas', () => {
     //#endregion
 
     // #region 【UI -> 数据】改
+
+    function updateNodesBatch(ids: string[], mutator: (node: LogicNode) => void) {
+        if (ids.length === 0) return;
+
+        execute((draft) => {
+            ids.forEach(id => {
+                const node = draft.nodes[id];
+                if (node) {
+                    mutator(node);
+                }
+            });
+        });
+    }
 
     // 更新节点位置 (仅针对 Root 或 Free 节点)
     function updateNodePosition(id: string, position: XYPosition, recordHistory = true) {
@@ -763,6 +778,7 @@ export const useCanvasStore = defineStore('canvas', () => {
         addMindMapRoot,
         addMindMapChildBatch,
         addMindMapSiblingBatch,
+        updateNodesBatch,
         updateNodePosition,
         updateNodeContent,
         updateNodeLink,
