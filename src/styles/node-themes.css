@@ -33,5 +33,15 @@
     --node-bg: #2a1f38;
 }
 
+.theme-pink {
+    --border-color: #e656aa;
+    --node-bg: #381f2d;
+}
+
+.theme-grey {
+    --border-color: #858585;
+    --node-bg: #2e2e2e;
+}
+
 /* 确保这些类能覆盖全局样式 */
 /* 如果 UniversalNode.vue 里没有用 scoped 锁定变量定义，这里通常直接生效 */

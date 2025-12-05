@@ -237,7 +237,7 @@ async function onContentCommand(key: string) {
 .universal-node.auto-size {
     width: fit-content;
     height: fit-content;
-    min-width: 80px;
+    min-width: 100px;
     min-height: 40px;
     max-width: 400px;
     /* 限制最大宽度，超过自动换行 */

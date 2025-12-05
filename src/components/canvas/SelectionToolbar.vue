@@ -15,6 +15,8 @@ const themeOptions = [
     { class: 'theme-green', name: 'Green' },
     { class: 'theme-blue', name: 'Blue' },
     { class: 'theme-purple', name: 'Purple' },
+    { class: 'theme-pink', name: 'Pink' },
+    { class: 'theme-grey', name: 'Grey' },
 ]
 
 // 1. 获取选中的节点数组 (Reactive)
@@ -95,7 +97,7 @@ function setTheme(themeClass: string) {
             </div>
             <template v-if="showSelectedCount">
                 <div class="divider"></div>
-                <div class="info">{{ selectedNodes.length }}  selected</div>
+                <div class="info">{{ selectedNodes.length }} selected</div>
             </template>
         </div>
     </Transition>
@@ -123,7 +125,7 @@ function setTheme(themeClass: string) {
 
     /* 毛玻璃效果 */
     backdrop-filter: blur(8px);
-    background-color: rgba(255, 255, 255, 0.041);
+    background-color: rgba(0, 0, 0, 0.2);
 }
 
 :global(.dark) .selection-toolbar {
