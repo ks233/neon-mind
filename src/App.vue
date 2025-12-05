@@ -21,6 +21,7 @@ import { useDark, useToggle } from '@vueuse/core'
 import { snapToGrid } from '@/utils/grid'
 import { useGlobalInteractions } from './composables/useGlobalInteractions'
 import { useGlobalShortcuts } from './composables/useGlobalShortcuts'
+import { useUiStore } from './stores/uiStore'
 
 // #region 初始化
 
@@ -37,7 +38,8 @@ useGlobalInteractions()
 useGlobalShortcuts()
 
 // 数据单例
-const store = useCanvasStore()
+const canvasStore = useCanvasStore()
+const uiStore = useUiStore()
 
 // VueFlow 工具函数
 const { screenToFlowCoordinate, addEdges, updateEdge, getEdges } = useVueFlow()
@@ -61,7 +63,7 @@ const edgeColor = computed(() => isDark.value ? '#666' : '#b1b1b7')
 
 // #region 创建节点
 
-function onDblClick(event: MouseEvent) {
+async function onDblClick(event: MouseEvent) {
     const target = event.target as Element
     const isNode = target.closest('.vue-flow__node')
     const isEdge = target.closest('.vue-flow__edge')
@@ -83,10 +85,9 @@ function onDblClick(event: MouseEvent) {
     const finalX = snapToGrid(rawX, gridSize.value)
     const finalY = snapToGrid(rawY, gridSize.value)
 
-    // 修正坐标中心（可选）
-    store.addMindMapRoot(finalX, finalY)
-
-
+    const newId = await canvasStore.addMindMapRoot(finalX, finalY)
+    uiStore.startEditing(newId)
+    uiStore.selectNode(newId)
     // 阻止默认行为（防止选中文字等）
     event.preventDefault()
 }
@@ -99,13 +100,13 @@ function onConnect(params: Connection) {
     // params 包含了 source(起点ID), target(终点ID), sourceHandle(起点端点ID) 等信息
     // addEdge 是官方提供的工具，它会自动处理去重，并生成 edge 对象
     addEdges(params)
-    store.createConnection(params)
+    canvasStore.createConnection(params)
 }
 
 function onEdgesChange(changes: EdgeChange[]) {
     changes.forEach(change => {
         if (change.type === 'remove') {
-            store.removeEdge(change.id)
+            canvasStore.removeEdge(change.id)
         }
     })
 }
@@ -129,14 +130,14 @@ function onEdgeUpdate({ edge, connection }: { edge: GraphEdge, connection: Conne
     // 并返回一个新的数组
     isUpdateSuccessful.value = true
     updateEdge(edge, connection)
-    store.updateEdgeConnection(edge, connection)
+    canvasStore.updateEdgeConnection(edge, connection)
 }
 
 // 拖拽到空地时删除边
 function onEdgeUpdateEnd(params: EdgeMouseEvent) {
     const { edge } = params
     if (!isUpdateSuccessful.value) {
-        store.removeEdge(edge.id)
+        canvasStore.removeEdge(edge.id)
     }
     // 重置状态（可选，为了保险）
     isUpdateSuccessful.value = false
@@ -162,14 +163,14 @@ function onNodeDrag(e: NodeDragEvent) {
     const draggedNode = e.node
     const draggedId = draggedNode.id
 
-    const logicNode = store.model.nodes[draggedId]
+    const logicNode = canvasStore.model.nodes[draggedId]
 
     const mouseEvent = e.event as MouseEvent;
     const { x: mouseX, y: mouseY } = screenToFlowCoordinate({
         x: mouseEvent.clientX,
         y: mouseEvent.clientY
     });
-    const proxyRect : Rect = {
+    const proxyRect: Rect = {
         x: mouseX - PROXY_SIZE / 2,
         y: mouseY - PROXY_SIZE / 2,
         width: PROXY_SIZE,
@@ -185,12 +186,12 @@ function onNodeDrag(e: NodeDragEvent) {
 
     if (targetNode) {
         // 更新 Store 的 UI 状态
-        store.dragTargetId = targetNode.id
-        store.dragIntent = calculateIntentByMouse(mouseY, targetNode)
-        store.dragDetachId = null
+        uiStore.dragTargetId = targetNode.id
+        uiStore.dragIntent = calculateIntentByMouse(mouseY, targetNode)
+        uiStore.dragDetachId = null
     } else {
-        store.dragTargetId = null
-        store.dragIntent = null
+        uiStore.dragTargetId = null
+        uiStore.dragIntent = null
     }
 
     // 断线
@@ -203,9 +204,9 @@ function onNodeDrag(e: NodeDragEvent) {
 
         // 3. 判断阈值
         if (distance > DETACH_DISTANCE) {
-            store.dragDetachId = draggedId
+            uiStore.dragDetachId = draggedId
         } else {
-            store.dragDetachId = null
+            uiStore.dragDetachId = null
         }
     }
 
@@ -216,22 +217,22 @@ function onNodeDragStop(e: NodeDragEvent) {
     const draggedNode = e.node
     e.nodes.forEach((node) => {
         // 同步回 Store
-        if (store.dragTargetId && store.dragIntent) {
-            console.log(`Moving ${draggedNode.id} -> ${store.dragTargetId} (${store.dragIntent})`)
+        if (uiStore.dragTargetId && uiStore.dragIntent) {
+            console.log(`Moving ${draggedNode.id} -> ${uiStore.dragTargetId} (${uiStore.dragIntent})`)
             // 调用 Store 执行逻辑
-            if (!store.moveMindMapNodeTo(node.id, store.dragTargetId, store.dragIntent)) {
-                store.updateNodePosition(node.id, node.position)
+            if (!canvasStore.moveMindMapNodeTo(node.id, uiStore.dragTargetId, uiStore.dragIntent)) {
+                canvasStore.updateNodePosition(node.id, node.position)
             }
-        } else if (store.dragDetachId === node.id) {
-            store.detachNode(node.id, node.position)
+        } else if (uiStore.dragDetachId === node.id) {
+            canvasStore.detachNode(node.id, node.position)
         } else {
-            store.updateNodePosition(node.id, node.position)
+            canvasStore.updateNodePosition(node.id, node.position)
         }
     })
     // 清理状态
-    store.dragTargetId = null
-    store.dragIntent = null
-    store.dragDetachId = null
+    uiStore.dragTargetId = null
+    uiStore.dragIntent = null
+    uiStore.dragDetachId = null
     dragStartPos.value = { x: 0, y: 0 }
 }
 
@@ -264,22 +265,22 @@ function onEdgeDoubleClick(e: EdgeMouseEvent) {
     // 简单判断：只允许编辑手动连线 (ID不以 'e-' 开头的通常是手动生成的，
     // 或者你可以检查 store.model.edges 里有没有这个 ID)
     // 如果是思维导图的结构线，可能不希望用户改文字
-    const logicEdge = store.model.edges.find(le => le.id === edgeId);
+    const logicEdge = canvasStore.model.edges.find(le => le.id === edgeId);
 
     if (logicEdge) {
         // 这里使用原生 prompt 做最简单的实现
         // 实际项目中可以弹出一个 Modal 或 Popover
-        const newLabel = prompt('输入连线文字:', logicEdge.label || '');
+        const newLabel = prompt('', logicEdge.label || '');
 
         if (newLabel !== null) {
-            store.updateEdgeLabel(edgeId, newLabel);
+            canvasStore.updateEdgeLabel(edgeId, newLabel);
         }
     }
 }
 
 function onPaneReadyHandler(instance: any) {
     console.log('VueFlow Pane Ready')
-    store.setFlowInstance(instance)
+    uiStore.setFlowInstance(instance)
 }
 </script>
 
@@ -291,8 +292,8 @@ function onPaneReadyHandler(instance: any) {
         @contextmenu.prevent>
         <VueFlow v-if="true"
             @pane-ready="onPaneReadyHandler"
-            v-model:nodes="store.vueNodes"
-            v-model:edges="store.vueEdges"
+            v-model:nodes="canvasStore.vueNodes"
+            v-model:edges="canvasStore.vueEdges"
             :node-types="nodeTypes"
             @dblclick="onDblClick"
             :zoom-on-double-click="false"
@@ -306,6 +307,7 @@ function onPaneReadyHandler(instance: any) {
                 style: { strokeWidth: 2, color: edgeColor, 'font-size': 20 },
                 interactionWidth: 50,
             }"
+            :min-zoom="0.2"
             :max-zoom="4"
             :selection-mode="SelectionMode.Partial"
             :edges-updatable="true"
@@ -329,11 +331,11 @@ function onPaneReadyHandler(instance: any) {
         <div class="debug-panel">
             <div class="debug-row">
                 <span class="label">Nodes:</span>
-                <span class="value">{{ store.vueNodes.length - 1 }}</span>
+                <span class="value">{{ canvasStore.vueNodes.length - 1 }}</span>
             </div>
             <div class="debug-row">
                 <span class="label">Edges:</span>
-                <span class="value">{{ store.vueEdges.length }}</span>
+                <span class="value">{{ canvasStore.vueEdges.length }}</span>
             </div>
         </div>
     </div>

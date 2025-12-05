@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
-import { useVueFlow, type GraphNode } from '@vue-flow/core'
-import { useCanvasStore } from '@/stores/canvasStore'
 import { NODE_CONSTANTS } from '@/config/layoutConfig'
+import { useCanvasStore } from '@/stores/canvasStore'
+import { useVueFlow } from '@vue-flow/core'
+import { computed } from 'vue'
 
 const store = useCanvasStore()
 const { getSelectedNodes, viewport } = useVueFlow()

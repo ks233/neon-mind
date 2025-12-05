@@ -1,11 +1,11 @@
 <script setup lang="ts">
-import { ref, nextTick, toRef, computed } from 'vue'
-import { GraphEdge, GraphNode, Handle, Position, useNode, useVueFlow, type NodeProps } from '@vue-flow/core'
-import { useResizeObserver } from '@vueuse/core'
-import { NodeResizer } from '@vue-flow/node-resizer'
-import { useCanvasStore } from '@/stores/canvasStore'
 import { useMindMapKeyboard } from '@/composables/useMindMapShortcuts'
+import { useCanvasStore } from '@/stores/canvasStore'
+import { GraphNode, Handle, Position, useNode, useVueFlow, type NodeProps } from '@vue-flow/core'
+import { NodeResizer } from '@vue-flow/node-resizer'
 import '@vue-flow/node-resizer/dist/style.css'
+import { useResizeObserver } from '@vueuse/core'
+import { computed, ref, toRef } from 'vue'
 
 // 定义 Props
 interface NodeData {
@@ -15,10 +15,13 @@ interface NodeData {
 }
 const props = defineProps<NodeProps<NodeData>>()
 const showDebug = ref(false)
-const isDetaching = computed(() => store.dragDetachId === id && store.dragIntent === null)
+const isDetaching = computed(() => uiStore.dragDetachId === id && uiStore.dragIntent === null)
 
 const { id, node } = useNode()
-const store = useCanvasStore()
+const canvasStore = useCanvasStore()
+const uiStore = useUiStore()
+
+import { useUiStore } from '@/stores/uiStore'
 import { ImagePayload, LogicNode } from '@/types/model'
 import { resolveContentComponent } from '@/utils/contentResolver'
 import { snapToGrid } from '@/utils/grid'
@@ -27,17 +30,17 @@ import { snapToGrid } from '@/utils/grid'
 const isEditing = computed({
     // 读取：判断全局的"令牌"是不是在自己手里
     get() {
-        return store.editingNodeId === id
+        return uiStore.editingNodeId === id
     },
     // 写入：修改本地变量时，自动代理到 Store Action
     set(val: boolean) {
         if (val) {
-            store.startEditing(id)
+            uiStore.startEditing(id)
         } else {
             // 只有当当前编辑的是自己时，才有权取消
             // (防止某些边缘情况误关了别人的编辑态)
-            if (store.editingNodeId === id) {
-                store.stopEditing()
+            if (uiStore.editingNodeId === id) {
+                uiStore.stopEditing()
             }
         }
     }
@@ -45,8 +48,8 @@ const isEditing = computed({
 const containerRef = ref<HTMLElement | null>(null) // 用于测量尺寸
 
 // 计算当前是否被高亮 (拖拽反馈)
-const isTarget = computed(() => store.dragTargetId === id)
-const intent = computed(() => isTarget.value ? store.dragIntent : null)
+const isTarget = computed(() => uiStore.dragTargetId === id)
+const intent = computed(() => isTarget.value ? uiStore.dragIntent : null)
 
 // 计算是否固定尺寸
 const isFixedSize = computed(() => props.data.fixedSize || node.resizing)
@@ -67,7 +70,7 @@ useResizeObserver(containerRef, (entries) => {
     // 只有在"自动模式"下，才把 DOM 的尺寸反向同步给 Store (用于 ELK 排版)
     // 加上简单的防抖判断避免微小抖动
     if (!isFixedSize.value && width > 0 && height > 0) {
-        store.reportAutoContentSize(id, { width, height })
+        canvasStore.reportAutoContentSize(id, { width, height })
     }
 })
 
@@ -82,15 +85,15 @@ function onDblClick(evt: MouseEvent) {
 function handleUpdate(type: 'content' | 'url' | 'ratio', val: any) {
     switch (type) {
         case 'content':
-            store.updateNodeContent(id, val);
+            canvasStore.updateNodeContent(id, val);
             break;
         case 'url':
             // 这里可以触发一个异步 Action 去爬取 og:image
-            store.updateNodeLink(id, val);
+            canvasStore.updateNodeLink(id, val);
             break;
         case 'ratio':
             // 图片加载完成后更新比例，用于排版
-            store.updateNodeData(id, { ratio: val });
+            canvasStore.updateNodeData(id, { ratio: val });
             break;
     }
 }
@@ -112,7 +115,7 @@ function onResize(evt: any) {
 function onResizeEnd(evt: any) {
     // 这会将 fixedSize 置为 true，切换到固定模式
     onResize(evt)
-    store.updateNodeSize(id, { width: node.dimensions.width, height: node.dimensions.height })
+    canvasStore.updateNodeSize(id, { width: node.dimensions.width, height: node.dimensions.height })
 }
 
 function handleMouseDown(e: MouseEvent) {
@@ -125,8 +128,8 @@ function handleMouseDown(e: MouseEvent) {
 
     // 2. [核心修复] 如果别人正在编辑，立刻帮他关闭！
     // 因为我们下面要 preventDefault，浏览器不会自动 blur 那个节点，所以我们要手动通过 Store 关闭它
-    if (store.editingNodeId && store.editingNodeId !== id) {
-        store.stopEditing();
+    if (uiStore.editingNodeId && uiStore.editingNodeId !== id) {
+        uiStore.stopEditing();
     }
 
     // 3. 阻止默认行为（防止当前节点获得 DOM 焦点，解决 Tab 乱跳问题）
@@ -139,12 +142,12 @@ const { addSelectedNodes, removeSelectedNodes, getSelectedNodes, findNode } = us
 
 async function onContentCommand(key: string) {
     if (key === 'Tab') {
-        const newIds = await store.addMindMapChildBatch([id])
+        const newIds = await canvasStore.addMindMapChildBatch([id])
         if (newIds.length == 1) {
             const newNode = findNode(newIds[0]) as GraphNode
             removeSelectedNodes([newNode])
             addSelectedNodes([newNode])
-            store.startEditing(newIds[0])
+            uiStore.startEditing(newIds[0])
         }
     } else if (key === 'Enter') {
         // 允许 Shift+Enter 换行 (已经在子组件过滤了吗？最好在子组件处理)

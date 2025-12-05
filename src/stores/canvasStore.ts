@@ -1,19 +1,19 @@
+import type { Connection, Edge, Node, VueFlowStore, XYPosition } from '@vue-flow/core';
+import { MarkerType } from '@vue-flow/core';
 import { defineStore } from 'pinia';
-import { nextTick, reactive, ref, shallowRef, toRaw } from 'vue';
-import type { CanvasModel, LogicNode, LogicEdge, MarkdownPayload, ImagePayload, LinkPayload } from '../types/model';
-import type { Node, Edge, XYPosition, Connection, GraphNode, VueFlowStore } from '@vue-flow/core';
-import { MarkerType, useVueFlow } from '@vue-flow/core';
+import { ref, shallowRef } from 'vue';
+import type { CanvasModel, ImagePayload, LinkPayload, LogicNode, MarkdownPayload } from '../types/model';
 
 import { computeMindMapLayout } from '@/services/layoutService';
 
-import { useDebounceFn } from '@vueuse/core';
 import { NODE_CONSTANTS } from '@/config/layoutConfig';
 import { fetchLinkMetadata } from '@/services/linkService';
-import { convertFileSrc } from '@tauri-apps/api/core';
 import { ProjectService } from '@/services/projectService';
+import { convertFileSrc } from '@tauri-apps/api/core';
+import { useDebounceFn } from '@vueuse/core';
 
-import { produce, applyPatches, enableMapSet, type Patch, enablePatches } from 'immer';
 import { getCurrentWindow } from '@tauri-apps/api/window';
+import { applyPatches, enableMapSet, enablePatches, produce, type Patch } from 'immer';
 
 // 开启 Set/Map 支持 (你的 model 用到了 Set)
 enableMapSet();
@@ -26,35 +26,13 @@ interface HistoryEntry {
 
 export const useCanvasStore = defineStore('canvas', () => {
 
-    //#region useVueFlow() 依赖注入
-    const flowInstance = shallowRef<VueFlowStore | null>(null);
-
-    function setFlowInstance(instance: VueFlowStore) {
-        flowInstance.value = instance;
-    }
-    //#endregion
-
-
     // #region 全局数据
-
     const model = shallowRef<CanvasModel>({
         rootNodes: new Set(),
         nodes: {},
         edges: [] // 存储非树状结构的额外连线
     });
-
-
-    const editingNodeId = ref<string | null>(null);
-
-    // Action: 命令指定节点进入编辑
-    function startEditing(id: string) {
-        editingNodeId.value = id;
-    }
-
-    // Action: 退出编辑（或清理状态）
-    function stopEditing() {
-        editingNodeId.value = null;
-    }
+    //#endregion
 
     // #region 撤消重做
     // [!code focus] 历史栈改存 Patch 数组，而不是巨大的 JSON 字符串
@@ -112,11 +90,6 @@ export const useCanvasStore = defineStore('canvas', () => {
         syncModelToView();
     }
     // #endregion
-
-    // UI 交互状态 (不需要持久化)
-    const dragTargetId = ref<string | null>(null);
-    const dragIntent = ref<'child' | 'above' | 'below' | null>(null);
-    const dragDetachId = ref<string | null>(null);
 
     // 坐标轴 UI 节点
     const worldOriginNode: Node = {
@@ -317,8 +290,6 @@ export const useCanvasStore = defineStore('canvas', () => {
             draft.nodes[id] = newNode;
             draft.rootNodes.add(id);
         })
-        startEditing(id)
-        selectNode(id)
         return id;
     }
 
@@ -454,14 +425,10 @@ export const useCanvasStore = defineStore('canvas', () => {
         return parentId;
     }
 
-    // [修改] 删除选中节点的 Action
-    function deleteSelectedNodes() {
+    // 删除选中节点的，返回接下来要选中的节点
+    function deleteSelectedNodes(selectedIds: string[]) {
         // 1. 获取当前选中的 ID
         // 注意：这里要在删除前获取，因为删了就找不到了
-        const instance = flowInstance.value;
-        if (!instance) return; // 防御性检查
-        const selected = instance.getSelectedNodes.value;
-        const selectedIds = selected.map(n => n.id);
 
         if (selectedIds.length === 0) return;
 
@@ -481,23 +448,7 @@ export const useCanvasStore = defineStore('canvas', () => {
         });
 
         // 4. [关键] 删除完成后，选中继承者
-        if (nextIdToSelect) {
-            // 需要等待 syncModelToView 完成 (execute 内部通常会调用)
-            // 如果 execute 是 async 的，记得 await
-            // 这里的 selectNode 会自动处理 nextTick 等待
-            selectNode(nextIdToSelect);
-        }
-    }
-
-    function selectNode(id: string) {
-        const instance = flowInstance.value;
-        if (!instance) return; // 防御性检查
-
-        // 现在你可以调用任何 Vue Flow 的方法了
-        const node = instance.findNode(id);
-        if (node) {
-            instance.addSelectedNodes([node]);
-        }
+        return nextIdToSelect
     }
 
     // 辅助：递归删除逻辑 (适配 Immer draft)
@@ -871,9 +822,6 @@ export const useCanvasStore = defineStore('canvas', () => {
         model,
         vueNodes,
         vueEdges,
-        dragTargetId,
-        dragIntent,
-        dragDetachId,
         // Actions
         createConnection,
         addContentNode,
@@ -900,12 +848,6 @@ export const useCanvasStore = defineStore('canvas', () => {
         loadModel,
         // 撤销
         undo, redo,
-        // editing
-        editingNodeId,
-        startEditing,
-        stopEditing,
-        // 依赖注入
-        setFlowInstance,
         // 项目文件
         projectRoot,
         setProjectRoot
