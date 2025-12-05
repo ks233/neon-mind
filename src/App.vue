@@ -1,14 +1,13 @@
 <script setup lang="ts">
-import { ref, computed, markRaw, nextTick } from 'vue'
-import { VueFlow, useVueFlow, SelectionMode } from '@vue-flow/core'
-import type { Connection, NodeTypesObject, Node, Edge, GraphEdge, EdgeMouseEvent, NodeRemoveChange, NodeDragEvent, NodeChange, EdgeChange, GraphNode, Rect } from '@vue-flow/core'
 import { Background } from '@vue-flow/background'
-import { Controls } from '@vue-flow/controls'
+import type { Connection, EdgeChange, EdgeMouseEvent, GraphEdge, GraphNode, NodeDragEvent, NodeTypesObject, Rect, XYPosition } from '@vue-flow/core'
+import { SelectionMode, VueFlow, useVueFlow } from '@vue-flow/core'
+import { computed, markRaw, ref } from 'vue'
 
 // 必须引入 Vue Flow 的默认样式，否则节点会乱飞
+import '@vue-flow/controls/dist/style.css'
 import '@vue-flow/core/dist/style.css'
 import '@vue-flow/core/dist/theme-default.css'
-import '@vue-flow/controls/dist/style.css'
 
 import OriginNode from '@/components/OriginNode.vue'
 import UniversalNode from '@/components/UniversalNode.vue'
@@ -16,14 +15,17 @@ import SelectionToolbar from '@/components/canvas/SelectionToolbar.vue'
 
 import { useCanvasStore } from '@/stores/canvasStore'
 
-import { useDark, useToggle } from '@vueuse/core'
+import { useDark, useMouse, useToggle } from '@vueuse/core'
 
 import { snapToGrid } from '@/utils/grid'
 import { useGlobalInteractions } from './composables/useGlobalInteractions'
 import { useGlobalShortcuts } from './composables/useGlobalShortcuts'
 import { useUiStore } from './stores/uiStore'
+import { LogicNode } from './types/model'
 
 // #region 初始化
+
+const { x: rawMouseX, y: rawMouseY } = useMouse()
 
 // 自定义节点
 const nodeTypes: NodeTypesObject = {
@@ -87,7 +89,7 @@ async function onDblClick(event: MouseEvent) {
 
     const newId = await canvasStore.addMindMapRoot(finalX, finalY)
     uiStore.startEditing(newId)
-    uiStore.selectNode(newId)
+    uiStore.selectNodeById(newId)
     // 阻止默认行为（防止选中文字等）
     event.preventDefault()
 }
@@ -150,13 +152,32 @@ function onEdgeUpdateEnd(params: EdgeMouseEvent) {
 const { getIntersectingNodes, findNode } = useVueFlow()
 
 const dragStartPos = ref({ x: 0, y: 0 })
-
+const lastDragPos = ref({ x: 0, y: 0 });
+const carriedNodes = ref<GraphNode[]>([]); // 缓存被拖拽的视图节点对象，避免每帧去 find
 function onNodeDragStart(e: NodeDragEvent) {
-    dragStartPos.value = { x: e.node.position.x, y: e.node.position.y }
+    const node = e.node;
+    dragStartPos.value = { ...node.position }
+    lastDragPos.value = { ...node.position }
+    // console.log(currentDraggingNode)
+    const logicNode = canvasStore.model.nodes[node.id];
+    if (logicNode && (logicNode.structure === 'root' || logicNode.structure === 'node')) {
+
+        // 3. 查找所有后代 ID
+        const descendantIds = e.nodes.flatMap(node => canvasStore.getDescendantIds(node.id));
+
+        // 4. 设置 UI 状态 (变透明)
+        uiStore.carriedNodeIds = new Set(descendantIds);
+
+        // 5. [性能优化] 预先查找并缓存这些视图节点实例
+        // 这样在 onNodeDrag 高频触发时，不用每次都去遍历查找
+        // e.viewNodes 或者 store.vueNodes 都可以，建议直接用 VueFlow 的内部实例
+        carriedNodes.value = uiStore.getGraphNodes(descendantIds)
+    }
 }
 
 // 1. 拖拽中 (Update Loop)
 const PROXY_SIZE = 30;
+
 
 function onNodeDrag(e: NodeDragEvent) {
     // 只处理单选拖拽，且拖拽的是思维导图节点
@@ -209,31 +230,82 @@ function onNodeDrag(e: NodeDragEvent) {
             uiStore.dragDetachId = null
         }
     }
+    // 移动显示位置
+
+    if (carriedNodes.value.length > 0) {
+        // 1. 计算增量 (Delta)
+        const dx = e.node.position.x - lastDragPos.value.x;
+        const dy = e.node.position.y - lastDragPos.value.y;
+
+        // 2. 更新所有子孙节点位置
+        // 直接修改 GraphNode 的 position，Vue Flow 会自动高效渲染
+        carriedNodes.value.forEach(child => {
+            child.position.x += dx;
+            child.position.y += dy;
+        });
+
+        // 3. 更新 lastPos 为当前位置，为下一帧做准备
+        lastDragPos.value = { ...e.node.position };
+    }
+    e.nodes.forEach(node => {
+        // node.position.x = snapToGrid(node.position.x);
+        // node.position.y = snapToGrid(node.position.y);
+        node.position.x = node.position.x;
+        node.position.y = node.position.y;
+    })
 
 }
 
 // 2. 拖拽结束 (OnMouseUp)
 function onNodeDragStop(e: NodeDragEvent) {
     const draggedNode = e.node
+    const newPositionsRecord: Record<string, XYPosition> = {};
     e.nodes.forEach((node) => {
+        node.position.x = snapToGrid(node.position.x);
+        node.position.y = snapToGrid(node.position.y);
         // 同步回 Store
         if (uiStore.dragTargetId && uiStore.dragIntent) {
             console.log(`Moving ${draggedNode.id} -> ${uiStore.dragTargetId} (${uiStore.dragIntent})`)
-            // 调用 Store 执行逻辑
             if (!canvasStore.moveMindMapNodeTo(node.id, uiStore.dragTargetId, uiStore.dragIntent)) {
-                canvasStore.updateNodePosition(node.id, node.position)
+                newPositionsRecord[node.id] = node.position
             }
         } else if (uiStore.dragDetachId === node.id) {
             canvasStore.detachNode(node.id, node.position)
         } else {
-            canvasStore.updateNodePosition(node.id, node.position)
+            newPositionsRecord[node.id] = node.position
         }
     })
+
+    if (carriedNodes.value.length > 0) {
+        // 1. 将子孙节点的最终位置同步回 Store Model
+        // 必须同步，否则下次 syncModelToView 会把它们弹回去
+        carriedNodes.value.forEach(child => {
+            newPositionsRecord[child.id] = child.position;
+        });
+        // 2. 清理状态
+        uiStore.carriedNodeIds.clear();
+        carriedNodes.value = [];
+    }
+
+    function mutator(node: LogicNode) {
+        node.x = newPositionsRecord[node.id].x
+        node.y = newPositionsRecord[node.id].y
+    }
+
+    const updateIds = Object.keys(newPositionsRecord)
+        .filter(id => canvasStore.isRoot(id))
+    if (updateIds.length > 0) {
+        canvasStore.updateNodesBatch(updateIds, mutator)
+    } else {
+        canvasStore.syncModelToView()
+    }
+
     // 清理状态
     uiStore.dragTargetId = null
     uiStore.dragIntent = null
     uiStore.dragDetachId = null
     dragStartPos.value = { x: 0, y: 0 }
+    lastDragPos.value = { x: 0, y: 0 }
 }
 
 function calculateIntentByMouse(mouseY: number, target: GraphNode): 'child' | 'above' | 'below' {
@@ -321,7 +393,7 @@ function onPaneReadyHandler(instance: any) {
             @edges-change="onEdgesChange"
             @edge-double-click="onEdgeDoubleClick"
             :only-render-visible-elements="false"
-            :snap-to-grid="true"
+            :snap-to-grid="false"
             :snap-grid="[gridSize, gridSize]">
             <Background variant="dots" :gap="gridSize" :color="gridColor" :size="2" :offset="[20, 20]" />
             <!-- <Controls /> -->

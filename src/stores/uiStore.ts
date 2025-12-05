@@ -12,6 +12,12 @@ export const useUiStore = defineStore('ui', () => {
     }
     //#endregion
 
+    const carriedNodeIds = ref<Set<string>>(new Set());
+
+    const selectionCount = computed(() =>
+        flowInstance.value?.getSelectedNodes.value.length ?? 0
+    )
+
     // 编辑状态
     const editingNodeId = ref<string | null>(null);
 
@@ -107,10 +113,12 @@ export const useUiStore = defineStore('ui', () => {
         getAllGraphNodes,
         getSelectedNodes,
         // 拖拽状态
+        carriedNodeIds,
         dragTargetId,
         dragIntent,
         dragDetachId,
         // 选中
+        selectionCount,
         selectNodeById,
         clearSelection,
         // editing

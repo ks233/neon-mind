@@ -1,12 +1,11 @@
 <script setup lang="ts">
 import { NODE_CONSTANTS } from '@/config/layoutConfig'
 import { useCanvasStore } from '@/stores/canvasStore'
+import { useUiStore } from '@/stores/uiStore'
 import { useVueFlow } from '@vue-flow/core'
 import { computed } from 'vue'
 
 const store = useCanvasStore()
-const { getSelectedNodes, viewport } = useVueFlow()
-
 // 预设颜色盘
 const themeOptions = [
     { class: 'theme-default', name: 'Default' },
@@ -20,18 +19,15 @@ const themeOptions = [
 ]
 
 // 1. 获取选中的节点数组 (Reactive)
-// Vue Flow 的 getSelectedNodes.value 返回的是 GraphNode 数组，包含实时的 position 和 dimensions
-const selectedNodes = computed(() => getSelectedNodes.value)
-const hasSelection = computed(() => selectedNodes.value.length > 0)
 
 // === Actions (保持不变) ===
-const selectedIds = computed(() => selectedNodes.value.map(n => n.id))
-const showSelectedCount = computed(() => selectedNodes.value.length > 1)
-
+const uiStore = useUiStore()
 
 function setAutoSize() {
-    store.updateNodesBatch(selectedIds.value, (node) => {
+    store.updateNodesBatch(uiStore.getSelectedNodeIds(), (node) => {
         node.fixedSize = false;
+        node.width = 0;
+        node.height = 0;
     });
 }
 
@@ -39,8 +35,8 @@ function setFixedSize() {
     // 1. 建立一个"ID -> 真实尺寸"的查找表
     // 因为 store.updateNodesBatch 的回调里只能拿到 LogicNode (数据)，拿不到 VueFlow 的渲染尺寸
     const currentDimensions = new Map<string, { w: number, h: number }>()
-
-    selectedNodes.value.forEach(n => {
+    const selectedNodes = uiStore.getSelectedNodes()
+    selectedNodes.forEach(n => {
         // n.dimensions 是 Vue Flow 实时测量出的 DOM 尺寸
         currentDimensions.set(n.id, {
             w: n.dimensions.width || 0,
@@ -48,8 +44,9 @@ function setFixedSize() {
         })
     })
 
+    const selectedIds = uiStore.getSelectedNodeIds()
     // 2. 批量更新
-    store.updateNodesBatch(selectedIds.value, (node) => {
+    store.updateNodesBatch(selectedIds, (node) => {
         node.fixedSize = true;
 
         // 获取该节点的视觉尺寸
@@ -68,7 +65,8 @@ function setFixedSize() {
 }
 
 function setTheme(themeClass: string) {
-    store.updateNodesBatch(selectedIds.value, (node) => {
+    const selectedIds = uiStore.getSelectedNodeIds()
+    store.updateNodesBatch(selectedIds, (node) => {
         // 1. 设置类名
         node.class = themeClass;
     });
@@ -78,7 +76,7 @@ function setTheme(themeClass: string) {
 <template>
     <Transition name="fade-scale">
         <div
-            v-if="hasSelection"
+            v-if="uiStore.selectionCount > 0"
             class="selection-toolbar">
             <div class="group">
                 <button @click="setAutoSize" title="自动大小">AUTO</button>
@@ -95,10 +93,10 @@ function setTheme(themeClass: string) {
                     :class="t.class"
                     @click="setTheme(t.class)"></button>
             </div>
-            <template v-if="showSelectedCount">
+            <!-- <template v-if="uiStore.selectionCount > 1">
                 <div class="divider"></div>
-                <div class="info">{{ selectedNodes.length }} selected</div>
-            </template>
+                <div class="info">{{ uiStore.selectionCount }} selected</div>
+            </template> -->
         </div>
     </Transition>
 </template>

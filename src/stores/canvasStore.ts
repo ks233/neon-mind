@@ -513,12 +513,14 @@ export const useCanvasStore = defineStore('canvas', () => {
         }, recordHistory)
     }
 
-    function updateNodeSize(id: string, size: { width: number, height: number }) {
+    function updateNodeSize(id: string, size: { width: number, height: number }, position: XYPosition) {
         execute(draft => {
             const node = draft.nodes[id];
             if (node) {
                 node.width = size.width;
                 node.height = size.height;
+                node.x = position.x;
+                node.y = position.y
                 node.fixedSize = true;
                 // 使用防抖 (Debounce) 或直接调用，取决于性能要求
                 debouncedLayout();
@@ -817,6 +819,30 @@ export const useCanvasStore = defineStore('canvas', () => {
         return false;
     }
 
+    // [新增] 辅助函数：递归获取某节点的所有后代 ID
+    function getDescendantIds(rootId: string): string[] {
+        const results: string[] = [];
+        const queue = [rootId];
+
+        while (queue.length > 0) {
+            const currentId = queue.shift()!;
+            const node = model.value.nodes[currentId];
+
+            if (node && node.childrenIds) {
+                // 将子节点加入结果和队列
+                node.childrenIds.forEach(childId => {
+                    results.push(childId);
+                    queue.push(childId);
+                });
+            }
+        }
+        return results;
+    }
+
+    function isRoot(id: string) {
+        return model.value.rootNodes.has(id);
+    }
+
     return {
         // State
         model,
@@ -850,6 +876,9 @@ export const useCanvasStore = defineStore('canvas', () => {
         undo, redo,
         // 项目文件
         projectRoot,
-        setProjectRoot
+        setProjectRoot,
+        // 辅助
+        getDescendantIds,
+        isRoot
     };
 });

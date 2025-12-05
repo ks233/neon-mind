@@ -50,6 +50,8 @@ const containerRef = ref<HTMLElement | null>(null) // 用于测量尺寸
 // 计算当前是否被高亮 (拖拽反馈)
 const isTarget = computed(() => uiStore.dragTargetId === id)
 const intent = computed(() => isTarget.value ? uiStore.dragIntent : null)
+const isCarried = computed(() => uiStore.carriedNodeIds.has(id))
+
 
 // 计算是否固定尺寸
 const isFixedSize = computed(() => props.data.fixedSize || node.resizing)
@@ -115,7 +117,11 @@ function onResize(evt: any) {
 function onResizeEnd(evt: any) {
     // 这会将 fixedSize 置为 true，切换到固定模式
     onResize(evt)
-    canvasStore.updateNodeSize(id, { width: node.dimensions.width, height: node.dimensions.height })
+    canvasStore.updateNodeSize(
+        id,
+        { width: node.dimensions.width, height: node.dimensions.height },
+        { x: snapToGrid(node.position.x), y: snapToGrid(node.position.y) }
+    )
 }
 
 function handleMouseDown(e: MouseEvent) {
@@ -172,7 +178,8 @@ async function onContentCommand(key: string) {
             'drag-over-below': isTarget && intent === 'below',
             'dragging': dragging,
             'is-detaching': isDetaching,
-            'is-editing': isEditing
+            'is-editing': isEditing,
+            'is-carried': isCarried
         }"
         @dblclick="onDblClick"
 
@@ -294,6 +301,15 @@ async function onContentCommand(key: string) {
     /* border-color: #177ddc; */
 }
 
+.universal-node.is-carried {
+    opacity: 0.5;
+    /* 半透明 */
+    pointer-events: none;
+    /* [可选] 拖拽父节点时，禁止子节点响应鼠标，防误触 */
+    transition: opacity 0.2s;
+    /* 增加一点渐变动效 */
+}
+
 /* Handle 样式 */
 .io-handle {
     width: 6px;
@@ -337,7 +353,7 @@ async function onContentCommand(key: string) {
 
 /* 拖拽反馈样式 */
 .drag-over-child {
-    box-shadow: 0 0 0 3px #1890ff !important;
+    box-shadow: 0 0 0 10px #188fff44 !important;
     background-color: rgba(24, 144, 255, 0.1);
 }
 
