@@ -1,15 +1,15 @@
 // src/composables/useGlobalShortcuts.ts 最终推荐版
-import { PersistenceManager } from '@/services/persistence/PersistenceManager'
 import { useCanvasStore } from '@/stores/canvasStore'
+import { useProjectStore } from '@/stores/projectStore'
 import { useUiStore } from '@/stores/uiStore'
 import { isInputActive } from '@/utils/keyboard'
-import { GraphNode, useVueFlow } from '@vue-flow/core'
 import { onKeyStroke } from '@vueuse/core'
 import { nextTick } from 'vue'
 
 export function useGlobalShortcuts() {
     const canvasStore = useCanvasStore()
     const uiStore = useUiStore()
+    const projectStore = useProjectStore()
 
     // [!code focus:15] 全局处理 Tab 键
     onKeyStroke('Tab', async (e) => {
@@ -62,12 +62,15 @@ export function useGlobalShortcuts() {
     })
 
     // 保存
-    onKeyStroke('s', async (e) => {
+    onKeyStroke(['s', 'S'], async (e) => {
         if (e.ctrlKey) {
             e.preventDefault();
-            // 如果已经有路径，可以直接保存(覆盖)；如果没有，另存为
-            // 这里简化为每次都另存为
-            await PersistenceManager.saveProjectAs(canvasStore.model);
+            console.log('hi')
+            if (e.shiftKey) {
+                await projectStore.saveAs();
+            } else {
+                await projectStore.save();
+            }
         }
     });
 
@@ -75,16 +78,17 @@ export function useGlobalShortcuts() {
     onKeyStroke('o', async (e) => {
         if (e.ctrlKey) {
             e.preventDefault();
-            const result = await PersistenceManager.openProject();
-            if (result) {
-                const { model: loadedModel, projectRoot: rootPath } = result;
-                await canvasStore.setProjectRoot(rootPath);
-                // 清空并加载
-                canvasStore.loadModel(loadedModel);
-            }
+            projectStore.open()
         }
     });
 
+    onKeyStroke('n', async (e) => {
+        if (e.ctrlKey) {
+            e.preventDefault();
+            console.log('new project')
+            projectStore.newProject()
+        }
+    });
 
     // 撤销和重做 (Ctrl-Z、Ctrl-Shift-Z)
     // 巨坑：一定要同时监听大写和小写，否则 shiftKey 始终为 false

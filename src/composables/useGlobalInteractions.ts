@@ -5,9 +5,13 @@ import { snapToGrid } from '@/utils/grid';
 import { listen } from '@tauri-apps/api/event';
 import { getCurrentWebview } from '@tauri-apps/api/webview';
 import { getCurrentWindow } from '@tauri-apps/api/window';
+import { useProjectStore } from '@/stores/projectStore';
+import { convertFileSrc } from '@tauri-apps/api/core';
 
 export function useGlobalInteractions() {
-    const store = useCanvasStore();
+    const canvasStore = useCanvasStore();
+    const projectStore = useProjectStore();
+
     const { screenToFlowCoordinate, getSelectedNodes } = useVueFlow();
     // 1. 处理全局粘贴
     async function handlePaste(e: ClipboardEvent) {
@@ -36,7 +40,7 @@ export function useGlobalInteractions() {
             if (item.type.indexOf('image') !== -1) {
                 const file = item.getAsFile();
                 if (file) {
-                    store.addContentNode('image', file, dropPos, parentId);
+                    canvasStore.addImage(dropPos, URL.createObjectURL(file), null, parentId);
                     e.preventDefault();
                 }
             }
@@ -44,7 +48,7 @@ export function useGlobalInteractions() {
             else if (item.type.indexOf('text/plain') !== -1) {
                 item.getAsString((text) => {
                     if (isValidUrl(text)) {
-                        store.addContentNode('link', text, dropPos, parentId);
+                        canvasStore.addContentNode('link', text, dropPos, parentId);
                     } else {
                         // 如果不是 URL 且不是图片，也许可以创建一个 Markdown 节点？
                         // store.addFreeNode(...)
@@ -71,15 +75,14 @@ export function useGlobalInteractions() {
             const paths = event.payload.paths as string[];
 
             console.log('Tauri File Drop Detected:', paths);
-
             // 计算中心点 (因为系统拖放事件不包含鼠标坐标)
             // 如果你想获取鼠标位置，需要配合 js 的 dragover 记录位置
             const centerPos = { x: 0, y: 0 };
 
-            paths.forEach((path) => {
+            paths.forEach(async (path) => {
                 // 调用 Store 添加路径类型的图片节点
                 // 注意：你需要确保 addContentNode 支持处理绝对路径字符串
-                store.addContentNode('image', path, centerPos);
+                canvasStore.addImage(centerPos, convertFileSrc(path), await projectStore.tryGetRelativePath(path));
             });
         });
     });

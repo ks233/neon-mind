@@ -3,6 +3,8 @@ import { convertFileSrc } from '@tauri-apps/api/core';
 import { join, extname } from '@tauri-apps/api/path';
 import type { CanvasModel, LogicNode, ImagePayload } from '@/types/model';
 import { toRaw } from 'vue';
+import { useCanvasStore } from '@/stores/canvasStore';
+import { useProjectStore } from '@/stores/projectStore';
 
 export class ResourceManager {
 
@@ -22,6 +24,8 @@ export class ResourceManager {
 
         const nodes = Object.values(saveModel.nodes) as LogicNode[];
 
+        const canvasStore = useCanvasStore()
+        const projectStore = useProjectStore()
         for (const node of nodes) {
             if (node.contentType === 'image') {
                 const imgNode = node as ImagePayload;
@@ -33,7 +37,6 @@ export class ResourceManager {
                         // 1. 统一使用 fetch 获取数据流
                         // 无论是 blob:, asset://, 还是 https://，fetch 都能搞定
                         const response = await fetch(imgNode.displaySrc);
-
                         if (!response.ok) throw new Error(`Fetch failed: ${response.statusText}`);
 
                         const blob = await response.blob();
@@ -55,22 +58,22 @@ export class ResourceManager {
                             if (mimeExt) ext = mimeExt;
                         }
 
-                        // 3. 计算内容哈希 (实现完美去重)
-                        // 哪怕你拖进来两次同一个文件，或者复制粘贴了两次，
-                        // 只要内容一样，它们就会指向同一个 assets 文件
+                        // 3. 保存路径
                         const hash = crypto.randomUUID();
                         const filename = `${hash}.${ext}`;
                         const targetPath = await join(assetsDir, filename);
 
                         // 4. 写入硬盘
-                        // 检查文件是否已存在 (哈希去重的好处：存在就不用写了)
                         if (!(await exists(targetPath))) {
                             await writeFile(targetPath, fileData);
                         }
 
+                        const localSrc = await projectStore.tryGetRelativePath(targetPath);
+                        if (localSrc === null) throw new Error("Failed to assign localSrc to new Image.");
                         // 5. 更新 Model
-                        imgNode.localSrc = filename; // 记录相对路径
-
+                        canvasStore.updateNode(imgNode.id, node => {
+                            (node as ImagePayload).localSrc = localSrc;
+                        }, false)
                     } catch (e) {
                         console.error(`Failed to save image: ${imgNode.displaySrc}`, e);
                         // 即使失败，也保留 displaySrc 以便下次尝试，或者让用户看到坏图
@@ -88,8 +91,6 @@ export class ResourceManager {
      * 读取 localSrc，生成 displaySrc
      */
     static async restoreAssets(model: CanvasModel, projectRoot: string): Promise<CanvasModel> {
-        const assetsDir = await join(projectRoot, 'assets');
-
         const nodes = Object.values(model.nodes) as LogicNode[];
 
         for (const node of nodes) {
@@ -98,7 +99,7 @@ export class ResourceManager {
 
                 if (imgNode.localSrc) {
                     // 拼接完整路径: D:/Project/assets/abc.png
-                    const fullPath = await join(assetsDir, imgNode.localSrc);
+                    const fullPath = await join(projectRoot, imgNode.localSrc);
 
                     // 转换为 WebView 可读路径
                     imgNode.displaySrc = convertFileSrc(fullPath);

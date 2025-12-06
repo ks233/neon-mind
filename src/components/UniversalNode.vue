@@ -231,9 +231,9 @@ const nodeStyles = computed(() => {
         </div>
 
         <div v-show="showDebug" class="debug-info">
-            <span>({{ Math.round(position.x) }}, {{ Math.round(position.y || 0) }}) </span>
-            <span>({{ Math.round(dimensions.width) }}, {{ Math.round(dimensions.height || 0) }}) </span>
-            <span>{{ id.substring(0, 8) }}</span><br>
+            <span>x:{{ Math.round(position.x) }}, y:{{ Math.round(position.y || 0) }}, </span>
+            <span> w:{{ Math.round(dimensions.width) }}, h:{{ Math.round(dimensions.height || 0) }}, </span>
+            <span>id: {{ id.substring(0, 8) }}</span><br>
             <template v-if="data.logicNode.contentType == 'image'">
                 <span> display: {{ (data.logicNode as ImagePayload).displaySrc }}</span><br>
                 <span> local: {{ (data.logicNode as ImagePayload).localSrc }}</span>
@@ -420,14 +420,11 @@ const nodeStyles = computed(() => {
 
 .debug-info {
     position: absolute;
-    /* 向上偏移，数值等于标签高度 + 间距 */
-    top: -18px;
-    left: 0;
-    /* 样式美化 */
     /* background: rgba(0, 0, 0, 0.85); */
     color: #ffffff5d;
-    /* Matrix Green */
-    padding: 4px 8px;
+    top: 100%;
+    margin-top: 0px;
+    padding: 4px 0px;
     border-radius: 4px;
     font-size: 11px;
     font-family: 'Consolas', monospace;
@@ -438,7 +435,7 @@ const nodeStyles = computed(() => {
     /* 鼠标穿透，不挡操作 */
     z-index: 9999;
     /* 确保浮在所有东西上面 */
-
+    /* 留一点间隙 */
     /* 可选：加个小阴影 */
     /* box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2); */
 }

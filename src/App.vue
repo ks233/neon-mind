@@ -20,6 +20,7 @@ import { useDark, useMouse, useToggle } from '@vueuse/core'
 import { snapToGrid } from '@/utils/grid'
 import { useGlobalInteractions } from './composables/useGlobalInteractions'
 import { useGlobalShortcuts } from './composables/useGlobalShortcuts'
+import { useProjectStore } from './stores/projectStore'
 import { useUiStore } from './stores/uiStore'
 import { LogicNode } from './types/model'
 
@@ -40,6 +41,7 @@ useGlobalInteractions()
 useGlobalShortcuts()
 
 // 数据单例
+const projectStore = useProjectStore();
 const canvasStore = useCanvasStore()
 const uiStore = useUiStore()
 
@@ -353,7 +355,9 @@ function onEdgeDoubleClick(e: EdgeMouseEvent) {
 function onPaneReadyHandler(instance: any) {
     console.log('VueFlow Pane Ready')
     uiStore.setFlowInstance(instance)
+    projectStore.newProject()
 }
+
 </script>
 
 <template>

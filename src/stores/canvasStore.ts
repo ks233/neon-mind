@@ -1,4 +1,4 @@
-import type { Connection, Edge, Node, VueFlowStore, XYPosition } from '@vue-flow/core';
+import type { Connection, Edge, Node, XYPosition } from '@vue-flow/core';
 import { MarkerType } from '@vue-flow/core';
 import { defineStore } from 'pinia';
 import { ref, shallowRef } from 'vue';
@@ -8,11 +8,9 @@ import { computeMindMapLayout } from '@/services/layoutService';
 
 import { NODE_CONSTANTS } from '@/config/layoutConfig';
 import { fetchLinkMetadata } from '@/services/linkService';
-import { ProjectService } from '@/services/projectService';
 import { convertFileSrc } from '@tauri-apps/api/core';
 import { useDebounceFn } from '@vueuse/core';
 
-import { getCurrentWindow } from '@tauri-apps/api/window';
 import { applyPatches, enableMapSet, enablePatches, produce, type Patch } from 'immer';
 
 // 开启 Set/Map 支持 (你的 model 用到了 Set)
@@ -24,6 +22,15 @@ interface HistoryEntry {
     redo: Patch[]; // 正向补丁 (用于重做)
 }
 
+function getInitialModel(): CanvasModel {
+    return {
+        rootNodes: new Set(),
+        nodes: {},
+        edges: []
+    };
+}
+
+
 export const useCanvasStore = defineStore('canvas', () => {
 
     // #region 全局数据
@@ -32,11 +39,20 @@ export const useCanvasStore = defineStore('canvas', () => {
         nodes: {},
         edges: [] // 存储非树状结构的额外连线
     });
+
+    function $reset() {
+        // A. 重置数据模型 (因为用了 shallowRef，直接 .value 赋值即可触发更新)
+        model.value = getInitialModel();
+        // B. 清空历史栈
+        historyStack.value = [];
+        futureStack.value = [];
+        syncModelToView()
+    }
     //#endregion
 
     // #region 撤消重做
     // [!code focus] 历史栈改存 Patch 数组，而不是巨大的 JSON 字符串
-    const historyStack = shallowRef<HistoryEntry[]>([]);
+    const historyStack = ref<HistoryEntry[]>([]);
     const futureStack = shallowRef<HistoryEntry[]>([]);
 
     async function execute(mutator: (draft: CanvasModel) => void, recordHistory = true) {
@@ -107,20 +123,6 @@ export const useCanvasStore = defineStore('canvas', () => {
     const vueEdges = shallowRef<Edge[]>([]);
 
     // #endregion
-
-
-    //#region 文件相关
-
-    // 当前工程的绝对路径 (例如 "D:/MyProjects/MindMap")
-    const projectRoot = ref<string | null>(null);
-
-    // Action: 设置工程路径 (在 PersistenceManager 打开/保存成功后调用)
-    async function setProjectRoot(path: string) {
-        projectRoot.value = path;
-        const title = `Mind Canvas - ${path}`;
-        await getCurrentWindow().setTitle(title);
-    }
-    //#endregion
 
     // #region 【数据 -> UI】刷新
 
@@ -194,6 +196,52 @@ export const useCanvasStore = defineStore('canvas', () => {
         })
     }
 
+    async function addImage(
+        position: { x: number, y: number },
+        displaySrc: string,
+        localSrc: string | null,
+        parentId?: string
+    ) {
+        const id = crypto.randomUUID();
+        const baseNode = {
+            id,
+            structure: parentId ? 'node' : 'root', // 有父级就是 node，没有就是 root (游离)
+            parentId: parentId,
+            childrenIds: [],
+            x: position.x,
+            y: position.y,
+            fixedSize: false,
+        };
+        let payload = {
+            ...baseNode,
+            contentType: 'image',
+            // height 会由 Layout 根据 ratio 算出来
+            ratio: 1, // 初始比例，组件加载完会更新
+            width: 200, // 默认宽
+            localSrc: undefined, // 标记为"未持久化"
+            displaySrc: displaySrc, // 立即显示
+        } as ImagePayload;
+
+        if (localSrc !== null) {
+            payload.localSrc = localSrc
+        }
+
+        await execute(draft => {
+            if (payload) {
+                draft.nodes[id] = payload;
+
+                if (parentId) {
+                    // 如果是作为子节点插入
+                    const parent = draft.nodes[parentId];
+                    if (parent) parent.childrenIds.push(id);
+                } else {
+                    // 如果是作为游离节点
+                    draft.rootNodes.add(id);
+                }
+            }
+        })
+    }
+
     // [新增] 创建内容节点的通用方法 (图片/链接)
     // 如果传入 parentId，则创建为子节点；否则创建为游离节点
     async function addContentNode(
@@ -217,22 +265,7 @@ export const useCanvasStore = defineStore('canvas', () => {
 
             // 1. 构造图片节点数据
             if (type === 'image') {
-                let displaySrc = ''
-                if (data instanceof File) {
-                    displaySrc = URL.createObjectURL(data); // MVP: 使用 Blob URL
-                } else {
-                    displaySrc = convertFileSrc(data);
-                }
 
-                payload = {
-                    ...baseNode,
-                    contentType: 'image',
-                    // height 会由 Layout 根据 ratio 算出来
-                    ratio: 1, // 初始比例，组件加载完会更新
-                    width: 200, // 默认宽
-                    localSrc: undefined, // 标记为"未持久化"
-                    displaySrc: displaySrc, // 立即显示
-                } as ImagePayload;
             }
             // 2. 构造链接节点数据
             else if (type === 'link' && typeof data === 'string') {
@@ -489,6 +522,15 @@ export const useCanvasStore = defineStore('canvas', () => {
     //#endregion
 
     // #region 【UI -> 数据】改
+
+    function updateNode(id: string, mutator: (node: LogicNode) => void, recordHistory: boolean) {
+        execute((draft) => {
+            const node = draft.nodes[id];
+            if (node) {
+                mutator(node);
+            }
+        }, recordHistory);
+    }
 
     function updateNodesBatch(ids: string[], mutator: (node: LogicNode) => void) {
         if (ids.length === 0) return;
@@ -778,9 +820,6 @@ export const useCanvasStore = defineStore('canvas', () => {
     // #endregion
 
     //#region 数据持久化
-    async function saveToFile() {
-        await ProjectService.saveProject(model.value);
-    }
 
     async function loadModel(loadedModel: CanvasModel) {
         await execute(
@@ -805,6 +844,10 @@ export const useCanvasStore = defineStore('canvas', () => {
         historyStack.value = []
         futureStack.value = []
     }
+
+    async function setLocalSrc(id: string,) {
+
+    }
     //#endregion
 
     // 辅助：检查 checkId 是否是 rootId 的后代
@@ -819,7 +862,7 @@ export const useCanvasStore = defineStore('canvas', () => {
         return false;
     }
 
-    // [新增] 辅助函数：递归获取某节点的所有后代 ID
+    // 辅助函数：递归获取某节点的所有后代 ID
     function getDescendantIds(rootId: string): string[] {
         const results: string[] = [];
         const queue = [rootId];
@@ -848,12 +891,15 @@ export const useCanvasStore = defineStore('canvas', () => {
         model,
         vueNodes,
         vueEdges,
+        $reset,
         // Actions
         createConnection,
+        addImage,
         addContentNode,
         addMindMapRoot,
         addMindMapChildBatch,
         addMindMapSiblingBatch,
+        updateNode,
         updateNodesBatch,
         updateNodePosition,
         updateNodeContent,
@@ -870,13 +916,11 @@ export const useCanvasStore = defineStore('canvas', () => {
         reportAutoContentSize,
         detachNode,
         // 数据持久化
-        saveToFile,
         loadModel,
         // 撤销
         undo, redo,
         // 项目文件
-        projectRoot,
-        setProjectRoot,
+        historyStack,
         // 辅助
         getDescendantIds,
         isRoot
