@@ -17,8 +17,8 @@ export type ContentType =
 // 数据载荷 (Payload) - 使用联合类型保证类型安全
 interface BaseNode {
     id: string;
-    structure: StructuralType; // [重命名] 原来的 type 改为 structure
-    contentType: ContentType;  // [新增]
+    structure: StructuralType;
+    contentType: ContentType;
 
     // 通用布局数据
     x: number;
@@ -31,6 +31,7 @@ interface BaseNode {
     childrenIds: string[];
 
     class?: string; // CSS 样式
+    contentScale?: number;
 }
 
 // 具体的内容数据接口

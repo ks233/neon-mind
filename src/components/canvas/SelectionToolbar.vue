@@ -18,6 +18,13 @@ const themeOptions = [
     { class: 'theme-grey', name: 'Grey' },
 ]
 
+const scaleOptions = [
+    { label: '1x', value: 1 },
+    { label: '2x', value: 2 },
+    { label: '3x', value: 3 },
+    { label: '4x', value: 4 },
+]
+
 // 1. 获取选中的节点数组 (Reactive)
 
 // === Actions (保持不变) ===
@@ -71,6 +78,13 @@ function setTheme(themeClass: string) {
         node.class = themeClass;
     });
 }
+
+function setScale(scale: number) {
+    const selectedIds = uiStore.getSelectedNodeIds()
+    store.updateNodesBatch(selectedIds, (node) => {
+        node.contentScale = scale;
+    });
+}
 </script>
 
 <template>
@@ -92,6 +106,18 @@ function setTheme(themeClass: string) {
                     class="color-btn"
                     :class="t.class"
                     @click="setTheme(t.class)"></button>
+            </div>
+
+            <div class="divider"></div>
+            <div class="group">
+                <button
+                    v-for="opt in scaleOptions"
+                    :key="opt.value"
+                    @click="setScale(opt.value)"
+                    :class="{ 'active': (uiStore.selectedNodes[0].data.logicNode.contentScale ?? 1) === opt.value }"
+                    title="Zoom Content">
+                    {{ opt.label }}
+                </button>
             </div>
             <!-- <template v-if="uiStore.selectionCount > 1">
                 <div class="divider"></div>
@@ -194,5 +220,12 @@ button:hover {
     opacity: 0;
     transform: translate(-50%, -100%) translateY(0px) scale(0.95);
     /* 修正 transform 覆盖问题 */
+}
+
+button.active {
+    background-color: var(--text-color);
+    color: var(--node-bg);
+    /* 反色高亮 */
+    font-weight: bold;
 }
 </style>

@@ -260,7 +260,6 @@ function onKeyDownCapture(e: KeyboardEvent) {
     user-select: none;
 
     font-size: 14px;
-    line-height: 1.6;
     color: var(--text-color);
     font-family: var(--md-font-family);
     font-size: var(--md-font-size);
@@ -300,7 +299,7 @@ function onKeyDownCapture(e: KeyboardEvent) {
     /* CM6 是按行渲染的，行与行之间没有 margin collapse，
      所以这里的 margin 需要微调以匹配 CM6 的视觉感受 */
     margin: 0.3em 0;
-    line-height: 1.5;
+    line-height: var(--md-line-height);
 }
 
 .markdown-body :deep(p:first-child) {

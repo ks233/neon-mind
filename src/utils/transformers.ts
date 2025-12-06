@@ -20,9 +20,11 @@ export function createVisualNode(
         type: 'Universal',
         position: computedPos || { x: logic.x, y: logic.y },
         data: {
+            logicNode: logic, // logic node 的所有数据
+            // 一些用于控制 CSS 的预计算数据
             isRoot: logic.structure === 'root',
             fixedSize: logic.fixedSize || false, // 传递标志位给组件
-            logicNode: logic,
+            // 计算排版时更新，用于上下左右导航
             depth: depth ?? 0,
             rootId: rootId ?? logic.id,
         },

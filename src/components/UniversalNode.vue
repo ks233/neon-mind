@@ -6,6 +6,7 @@ import { NodeResizer } from '@vue-flow/node-resizer'
 import '@vue-flow/node-resizer/dist/style.css'
 import { useResizeObserver } from '@vueuse/core'
 import { computed, ref, toRef } from 'vue'
+import { NODE_CONSTANTS } from '@/config/layoutConfig'
 
 // 定义 Props
 interface NodeData {
@@ -162,6 +163,16 @@ async function onContentCommand(key: string) {
     }
 }
 
+const nodeStyles = computed(() => {
+    const scale = props.data.logicNode.contentScale || 1
+
+    const baseMaxWidth = NODE_CONSTANTS.MAX_WIDTH
+
+    return {
+        '--converted-max-width': (baseMaxWidth * scale) + 'px'
+    }
+})
+
 </script>
 
 <template>
@@ -182,7 +193,7 @@ async function onContentCommand(key: string) {
             'is-carried': isCarried
         }"
         @dblclick="onDblClick"
-
+        :style="nodeStyles"
         @mouseenter="showDebug = true"
         @mouseleave="showDebug = false"
         @mousedown.prevent="handleMouseDown">
@@ -208,6 +219,10 @@ async function onContentCommand(key: string) {
                 :data="(data.logicNode as any)"
                 :fixed-size="isFixedSize"
                 :is-editing="isEditing"
+
+                :style="{
+                    zoom: data.logicNode.contentScale || 1
+                }"
                 @blur="isEditing = false"
                 @command="onContentCommand"
                 @update:content="(v: any) => handleUpdate('content', v)"
@@ -249,7 +264,7 @@ async function onContentCommand(key: string) {
     height: fit-content;
     min-width: 100px;
     min-height: 40px;
-    max-width: 400px;
+    max-width: var(--converted-max-width);
     /* 限制最大宽度，超过自动换行 */
 }
 
@@ -261,7 +276,8 @@ async function onContentCommand(key: string) {
 }
 
 .universal-node.dragging {
-    opacity: 0.4;
+    opacity: 0.5;
+    z-index: -2;
 }
 
 .universal-node.is-detaching {

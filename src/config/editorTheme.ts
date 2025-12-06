@@ -23,6 +23,7 @@ export const baseTheme = EditorView.theme({
     // 修正：让 CM6 的行间距与 Markdown P 标签的 margin 尽量接近
     ".cm-line": {
         padding: "0",
+        lineHeight: "var(--md-line-height)"
     },
     ".cm-lineWrapping": {
         padding: "0"

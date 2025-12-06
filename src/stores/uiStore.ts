@@ -26,6 +26,8 @@ export const useUiStore = defineStore('ui', () => {
     const dragIntent = ref<'child' | 'above' | 'below' | null>(null);
     const dragDetachId = ref<string | null>(null);
 
+    const selectedNodes = computed(getSelectedNodes)
+
     function getSelectedNodes() {
         const instance = flowInstance.value;
         if (!instance) return []; // 防御性检查
@@ -106,6 +108,7 @@ export const useUiStore = defineStore('ui', () => {
 
     return {
         setFlowInstance,
+        selectedNodes,
         getSelectedNodeIds,
         // 获取 GraphNode
         getGraphNode,
