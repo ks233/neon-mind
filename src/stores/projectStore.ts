@@ -143,6 +143,7 @@ export const useProjectStore = defineStore('project', () => {
     }
     return {
         projectFilePath,
+        projectDir,
         isDirty,
         isSaving,
         newProject,

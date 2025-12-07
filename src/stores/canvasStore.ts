@@ -4,11 +4,10 @@ import { defineStore } from 'pinia';
 import { ref, shallowRef } from 'vue';
 import type { CanvasModel, ImagePayload, LinkPayload, LogicNode, MarkdownPayload } from '../types/model';
 
-import { computeMindMapLayout } from '@/services/layoutService';
+import { calculateMaxRectsPack, computeMindMapLayout, NodeGeometry } from '@/services/layoutService';
 
 import { NODE_CONSTANTS } from '@/config/layoutConfig';
 import { fetchLinkMetadata } from '@/services/linkService';
-import { convertFileSrc } from '@tauri-apps/api/core';
 import { useDebounceFn } from '@vueuse/core';
 
 import { applyPatches, enableMapSet, enablePatches, produce, type Patch } from 'immer';
@@ -861,7 +860,6 @@ export const useCanvasStore = defineStore('canvas', () => {
         }
         return false;
     }
-
     // 辅助函数：递归获取某节点的所有后代 ID
     function getDescendantIds(rootId: string): string[] {
         const results: string[] = [];
@@ -885,6 +883,34 @@ export const useCanvasStore = defineStore('canvas', () => {
     function isRoot(id: string) {
         return model.value.rootNodes.has(id);
     }
+
+    //#region 类似 pureref 的 pack/align
+    // [修改] 接收几何快照作为参数
+    function packNodes(targetIds: string[], geometryMap: Map<string, NodeGeometry>) {
+        execute((draft) => {
+            // 1. 过滤：只处理根节点或游离节点 (防止破坏思维导图结构)
+            // [修复] 之前的代码 filter 没赋值，这里必须赋值给新变量
+            const validRootIds = targetIds.filter(id => {
+                const node = draft.nodes[id];
+                return node && !node.parentId;
+            });
+
+            if (validRootIds.length === 0) return;
+
+            // 2. 委托给 Service 计算 (使用传入的真实几何数据)
+            const updates = calculateMaxRectsPack(validRootIds, geometryMap);
+
+            // 3. 应用更新
+            Object.entries(updates).forEach(([id, pos]) => {
+                const node = draft.nodes[id];
+                if (node) {
+                    node.x = pos.x;
+                    node.y = pos.y;
+                }
+            });
+        });
+    }
+    //#endregion
 
     return {
         // State
@@ -923,6 +949,7 @@ export const useCanvasStore = defineStore('canvas', () => {
         historyStack,
         // 辅助
         getDescendantIds,
-        isRoot
+        isRoot,
+        packNodes
     };
 });

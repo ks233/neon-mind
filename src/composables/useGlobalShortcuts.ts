@@ -85,7 +85,6 @@ export function useGlobalShortcuts() {
     onKeyStroke('n', async (e) => {
         if (e.ctrlKey) {
             e.preventDefault();
-            console.log('new project')
             projectStore.newProject()
         }
     });
@@ -210,6 +209,22 @@ export function useGlobalShortcuts() {
         }
     });
 
+    onKeyStroke('p', (e) => {
+        if (e.ctrlKey || e.metaKey) {
+            e.preventDefault();
+            // 1. 获取选中 ID
+            let selectedIds = uiStore.getSelectedNodeIds();
+
+            if (selectedIds.length === 0) {
+                selectedIds = uiStore.getAllNodeIds()
+            }
+            // 2. 获取几何快照 (传入 model.nodes 以便读取结构关系)
+            const geometryMap = uiStore.getGeometryMap(canvasStore.model.nodes);
+
+            // 3. 执行排版
+            canvasStore.packNodes(selectedIds, geometryMap);
+        }
+    });
     // debug 用
     onKeyStroke(['d', 'D'], (e) => {
         console.log('ctrl', e.ctrlKey)

@@ -13,6 +13,7 @@ import type { MarkdownPayload } from '@/types/model'
 import { markdownKeymapExtension } from '@/config/markdownCommands';
 import { useCanvasStore } from '@/stores/canvasStore'
 import { convertFileSrc } from '@tauri-apps/api/core'
+import { useProjectStore } from '@/stores/projectStore'
 
 
 const props = defineProps<{
@@ -35,7 +36,7 @@ const defaultImageRender = md.renderer.rules.image || function (tokens, idx, opt
     return self.renderToken(tokens, idx, options)
 }
 
-const store = useCanvasStore()
+const projectStore = useProjectStore()
 
 md.renderer.rules.image = (tokens, idx, options, env, self) => {
     const token = tokens[idx]
@@ -45,7 +46,7 @@ md.renderer.rules.image = (tokens, idx, options, env, self) => {
         const src = token.attrs![srcIndex][1]
         // 检查是否是相对路径 (以 ./ 或 ../ 开头，或者不包含 ://)
         // 简单起见，我们主要处理 ./assets/ 这种情况
-        if (store.projectRoot && (src.startsWith('./') || src.startsWith('assets/'))) {
+        if (projectStore.projectDir && (src.startsWith('./') || src.startsWith('assets/'))) {
             try {
                 // 1. 简单的路径清洗 (移除 ./)
                 const cleanRelPath = src.replace(/^\.\//, '')
@@ -58,9 +59,9 @@ md.renderer.rules.image = (tokens, idx, options, env, self) => {
 
                 // 简单拼接：Root + Sep + Relative
                 // 注意处理 projectRoot 末尾可能已有斜杠的情况
-                const root = store.projectRoot.endsWith(sep)
-                    ? store.projectRoot
-                    : store.projectRoot + sep
+                const root = projectStore.projectDir.endsWith(sep)
+                    ? projectStore.projectDir
+                    : projectStore.projectDir + sep
 
                 const absolutePath = root + cleanRelPath.replace(/\//g, sep)
                 // 3. 转换为 WebView 协议 (asset://)

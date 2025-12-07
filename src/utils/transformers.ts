@@ -15,7 +15,7 @@ export function createVisualNode(
         ? { width: `${logic.width}px`, height: `${logic.height}px` }
         : undefined;
 
-    return {
+    const newNode = {
         id: logic.id,
         type: 'Universal',
         position: computedPos || { x: logic.x, y: logic.y },
@@ -32,4 +32,5 @@ export function createVisualNode(
         style: sizeStyle,
         class: logic.class ?? 'theme-default'
     };
+    return newNode
 }

@@ -1,8 +1,11 @@
+import { LAYOUT_CONSTANTS, NODE_CONSTANTS } from '@/config/layoutConfig';
+import { useCanvasStore } from '@/stores/canvasStore';
+import { useUiStore } from '@/stores/uiStore';
 import type { LogicNode } from '@/types/model';
-import type { Node, Edge } from '@vue-flow/core';
-import { createVisualNode } from '@/utils/transformers';
-import { NODE_CONSTANTS, LAYOUT_CONSTANTS } from '@/config/layoutConfig';
 import { ceilToGrid } from '@/utils/grid';
+import { createVisualNode } from '@/utils/transformers';
+import type { Edge, Node } from '@vue-flow/core';
+import potpack from 'potpack';
 
 // === 自定义布局节点 ===
 // 这是一个临时对象，仅在排版计算期间存在
@@ -218,7 +221,7 @@ function generateElements(root: LayoutNode, logicRoot: LogicNode) {
                 type: 'smoothstep',
                 animated: false,
                 class: node.data.class,
-                style: {stroke: 'var(--border-color)', strokeWidth: 3 },
+                style: { stroke: 'var(--border-color)', strokeWidth: 3 },
                 updatable: false
             });
         }
@@ -230,3 +233,238 @@ function generateElements(root: LayoutNode, logicRoot: LogicNode) {
 
     return { nodes: resultNodes, edges: resultEdges };
 }
+
+
+// ==========================================================
+// 辅助算法: 树形几何计算
+// ==========================================================
+
+export interface NodeGeometry {
+    id: string;
+    x: number;      // 绝对世界坐标
+    y: number;      // 绝对世界坐标
+    width: number;  // 真实渲染宽度
+    height: number; // 真实渲染高度
+    childrenIds: string[]; // 结构关系 (依然来自 Model)
+}
+
+/**
+ * 递归计算树的包围盒
+ * @param geometryMap 包含了所有节点的【真实】视觉信息
+ */
+export function getTreeBounds(
+    rootId: string,
+    geometryMap: Map<string, NodeGeometry> // [!code focus] 改为传入 Map
+) {
+    const root = geometryMap.get(rootId);
+    if (!root) return null;
+
+    let minX = root.x;
+    let minY = root.y;
+    let maxX = root.x + root.width;
+    let maxY = root.y + root.height;
+
+    const memberIds: string[] = [rootId];
+    const queue = [...root.childrenIds];
+
+    while (queue.length > 0) {
+        const id = queue.shift()!;
+        const node = geometryMap.get(id); // [!code focus] 从 Map 获取真实位置
+        if (node) {
+            memberIds.push(id);
+
+            const nodeRight = node.x + node.width;
+            const nodeBottom = node.y + node.height;
+
+            if (node.x < minX) minX = node.x;
+            if (node.y < minY) minY = node.y;
+            if (nodeRight > maxX) maxX = nodeRight;
+            if (nodeBottom > maxY) maxY = nodeBottom;
+
+            if (node.childrenIds) {
+                queue.push(...node.childrenIds);
+            }
+        }
+    }
+
+    return {
+        x: minX,
+        y: minY,
+        width: maxX - minX,
+        height: maxY - minY,
+        memberIds
+    };
+}
+
+// ==========================================================
+// 核心功能: 对齐与打包
+// ==========================================================
+
+/**
+ * 计算对齐后的坐标
+ * @returns 返回一个 Map: { id: { x, y } }
+ */
+export function calculateAlignLayout(
+    targetIds: string[],
+    allNodes: Record<string, LogicNode>,
+    direction: 'left' | 'right' | 'top' | 'bottom'
+) {
+    const updates: Record<string, { x: number, y: number }> = {};
+    if (targetIds.length < 2) return updates;
+
+    const nodes = targetIds.map(id => allNodes[id]).filter(n => n && !n.parentId); // 过滤掉子节点，防止破坏结构
+    if (nodes.length === 0) return updates;
+
+    // 1. 计算对齐锚点 (Anchor)
+    let anchor = 0;
+    if (direction === 'left') anchor = Math.min(...nodes.map(n => n.x));
+    else if (direction === 'right') anchor = Math.max(...nodes.map(n => n.x + (n.width || 0)));
+    else if (direction === 'top') anchor = Math.min(...nodes.map(n => n.y));
+    else if (direction === 'bottom') anchor = Math.max(...nodes.map(n => n.y + (n.height || 0)));
+
+    // 2. 计算新坐标
+    nodes.forEach(node => {
+        let newX = node.x;
+        let newY = node.y;
+        const w = node.width || 0;
+        const h = node.height || 0;
+
+        switch (direction) {
+            case 'left': newX = anchor; break;
+            case 'right': newX = anchor - w; break;
+            case 'top': newY = anchor; break;
+            case 'bottom': newY = anchor - h; break;
+        }
+
+        updates[node.id] = { x: newX, y: newY };
+    });
+
+    return updates;
+}
+/**
+ * 计算打包布局
+ */
+export function calculatePackLayout(
+    targetIds: string[],
+    geometryMap: Map<string, NodeGeometry> // [!code focus] 输入改为 Geometry Map
+) {
+    const GAP = 20;
+    const updates: Record<string, { x: number, y: number }> = {};
+
+    const boxes = targetIds.map(id => {
+        // [!code focus] 传入 geometryMap
+        const bounds = getTreeBounds(id, geometryMap);
+        if (!bounds) return null;
+
+        return {
+            id: id,
+            w: bounds.width + GAP,
+            h: bounds.height + GAP,
+            originalX: bounds.x,
+            originalY: bounds.y,
+            memberIds: bounds.memberIds
+        };
+    }).filter(Boolean) as any[];
+
+    if (boxes.length === 0) return updates;
+
+    potpack(boxes);
+
+    // 计算重心偏移
+    const oldMinX = Math.min(...boxes.map(b => b.originalX));
+    const oldMinY = Math.min(...boxes.map(b => b.originalY));
+
+    boxes.forEach(box => {
+        const targetX = oldMinX + box.x;
+        const targetY = oldMinY + box.y;
+        const dx = targetX - box.originalX;
+        const dy = targetY - box.originalY;
+
+        box.memberIds.forEach((memberId: string) => {
+            const member = geometryMap.get(memberId);
+            if (member) {
+                // [!code focus] 返回新的绝对坐标
+                updates[memberId] = {
+                    x: member.x + dx,
+                    y: member.y + dy
+                };
+            }
+        });
+    });
+
+    return updates;
+}
+
+import { MaxRectsPacker } from 'maxrects-packer';
+
+export function calculateMaxRectsPack(
+    targetIds: string[],
+    geometryMap: Map<string, NodeGeometry>
+) {
+    const GAP = 20; // 可配置间距
+    const updates: Record<string, { x: number, y: number }> = {};
+
+    // 1. 准备数据
+    const inputs = targetIds.map(id => {
+        const bounds = getTreeBounds(id, geometryMap);
+        if (!bounds) return null;
+        return {
+            id,
+            width: bounds.width,
+            height: bounds.height,
+            originalX: bounds.x,
+            originalY: bounds.y,
+            memberIds: bounds.memberIds,
+            // MaxRectsPacker 需要的数据结构
+            data: { id }
+        };
+    }).filter(Boolean) as any[];
+
+    if (inputs.length === 0) return updates;
+
+    // 2. 配置 Packer
+    // 4096, 4096 是画布预设最大宽高，会自动扩展
+    // padding: 间距
+    const packer = new MaxRectsPacker(4096, 4096, GAP, {
+        smart: true,      // 尝试多种策略寻找最优解
+        pot: false,       // 不需要 Power of Two (那是给游戏贴图用的)
+        border: GAP       // 画布边缘留白
+    });
+
+    // 3. 执行打包
+    packer.addArray(inputs);
+
+    // 注意：如果画布太小装不下，packer 会生成多个 bin。
+    // 对于无限画布，我们通常只取第一个 bin，或者把 bin 铺开
+    // 这里假设所有节点都能装进一个大 bin (因为我们设了 4096+ 且会自动扩容)
+    if (packer.bins.length > 0) {
+        const bin = packer.bins[0];
+
+        // 4. 计算整体偏移（保持在原地附近）
+        const oldMinX = Math.min(...inputs.map(b => b.originalX));
+        const oldMinY = Math.min(...inputs.map(b => b.originalY));
+
+        bin.rects.forEach(rect => {
+            const box = rect as any; // 类型断言
+
+            const targetX = oldMinX + box.x;
+            const targetY = oldMinY + box.y;
+            const dx = targetX - box.originalX;
+            const dy = targetY - box.originalY;
+
+            // 应用位移到整棵树
+            box.memberIds.forEach((memberId: string) => {
+                const member = geometryMap.get(memberId);
+                if (member) {
+                    updates[memberId] = {
+                        x: member.x + dx,
+                        y: member.y + dy
+                    };
+                }
+            });
+        });
+    }
+
+    return updates;
+}
+

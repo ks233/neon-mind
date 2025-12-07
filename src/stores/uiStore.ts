@@ -1,3 +1,4 @@
+import { NodeGeometry } from "@/services/layoutService";
 import { GraphNode, VueFlowStore } from "@vue-flow/core";
 import { defineStore } from "pinia";
 import { computed, ref, shallowRef } from "vue";
@@ -47,6 +48,12 @@ export const useUiStore = defineStore('ui', () => {
         if (node) {
             instance.addSelectedNodes([node]);
         }
+    }
+
+    function getAllNodeIds() {
+        const instance = flowInstance.value;
+        if (!instance) return []; // 防御性检查
+        return instance.getNodes.value.map(n => n.id).filter(n => n !== 'world-origin')
     }
 
     function clearSelection() {
@@ -106,10 +113,39 @@ export const useUiStore = defineStore('ui', () => {
         }
     }
 
+    function getGeometryMap(modelNodes: Record<string, any>): Map<string, NodeGeometry> {
+        const instance = flowInstance.value;
+        const map = new Map<string, NodeGeometry>();
+        if (!instance) return map;
+
+        const graphNodes = instance.getNodes.value;
+
+        graphNodes.forEach(gn => {
+            const logicNode = modelNodes[gn.id];
+            // 必须确保逻辑节点存在，否则无法获取 childrenIds 结构信息
+            if (logicNode) {
+                map.set(gn.id, {
+                    id: gn.id,
+                    // 优先使用计算后的绝对坐标
+                    x: gn.computedPosition.x,
+                    y: gn.computedPosition.y,
+                    // 优先使用真实渲染尺寸
+                    width: gn.dimensions.width || logicNode.width || 0,
+                    height: gn.dimensions.height || logicNode.height || 0,
+                    // 结构关系依然信赖 Model
+                    childrenIds: logicNode.childrenIds || []
+                });
+            }
+        });
+
+        return map;
+    }
+
     return {
         setFlowInstance,
         selectedNodes,
         getSelectedNodeIds,
+        getAllNodeIds,
         // 获取 GraphNode
         getGraphNode,
         getGraphNodes,
@@ -129,6 +165,7 @@ export const useUiStore = defineStore('ui', () => {
         startEditing,
         stopEditing,
         selectNodes,
-        startEditSelectedNode
+        startEditSelectedNode,
+        getGeometryMap
     };
 });
