@@ -1,20 +1,19 @@
 <script setup lang="ts">
-import { ref, watch, nextTick, computed, onBeforeUnmount, onMounted } from 'vue'
 import MarkdownIt from 'markdown-it'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 // CodeMirror 核心
-import { EditorView, keymap } from '@codemirror/view'
-import { EditorState } from '@codemirror/state'
-import { markdown, markdownLanguage } from '@codemirror/lang-markdown'
 import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirror/commands'
+import { markdown, markdownLanguage } from '@codemirror/lang-markdown'
 import { languages } from '@codemirror/language-data'
+import { EditorState } from '@codemirror/state'
+import { EditorView, keymap } from '@codemirror/view'
 // 导入样式
 import { baseTheme, markdownHighlighting } from '@/config/editorTheme'
-import type { MarkdownPayload } from '@/types/model'
-import { markdownKeymapExtension } from '@/config/markdownCommands';
-import { useCanvasStore } from '@/stores/canvasStore'
-import { convertFileSrc } from '@tauri-apps/api/core'
+import { markdownKeymapExtension } from '@/config/markdownCommands'
 import { useProjectStore } from '@/stores/projectStore'
-import { openPath, openUrl } from '@tauri-apps/plugin-opener';
+import type { MarkdownPayload } from '@/types/model'
+import { convertFileSrc } from '@tauri-apps/api/core'
+import { openUrl } from '@tauri-apps/plugin-opener'
 
 const props = defineProps<{
     data: MarkdownPayload
@@ -31,6 +30,7 @@ const emit = defineEmits<{
 import hljs from 'highlight.js'
 // 你可以在 node_modules/highlight.js/styles/ 下挑选喜欢的颜色主题，例如 github.css, atom-one-dark.css 等
 import 'highlight.js/styles/atom-one-dark.css'
+import { smartWordExtension } from './smartWordExt'
 //#region === 1. 阅读模式逻辑 (MarkdownIt) ===
 const md = new MarkdownIt(
     {
@@ -173,7 +173,10 @@ function initEditor() {
             markdownHighlighting,
             history(),
             keymap.of([indentWithTab, ...filteredDefaultKeymap, ...historyKeymap]),
-            markdown({ base: markdownLanguage, codeLanguages: languages }),
+            markdown({
+                base: markdownLanguage,
+                codeLanguages: languages,
+            }),
             EditorView.lineWrapping, // 自动换行
             EditorView.updateListener.of((u) => {
                 const docString = u.state.doc.toString()
@@ -187,6 +190,8 @@ function initEditor() {
                 }
             }),
             markdownKeymapExtension,
+            // 1. 注册智能分词按键映射 (优先级通常较高，因为它在后面添加)
+            smartWordExtension
         ]
     })
 
@@ -519,7 +524,7 @@ function onMouseDown(e: MouseEvent) {
   background-color: transparent;
 } */
 
-/* [!code focus:10] 核心修复 */
+/* 使链接能被点击 */
 :deep(a) {
     /* 1. 强制允许响应鼠标 (关键!) */
     /* 防止父级可能存在的 pointer-events: none 继承下来 */
@@ -540,7 +545,7 @@ function onMouseDown(e: MouseEvent) {
 }
 
 
-/* [!code focus:50] === Markdown 表格与代码块样式 === */
+/* === Markdown 表格与代码块样式 === */
 
 /* 注意：v-html 生成的内容需要使用 :deep() 选择器 */
 
