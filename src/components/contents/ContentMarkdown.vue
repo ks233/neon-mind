@@ -14,7 +14,7 @@ import { markdownKeymapExtension } from '@/config/markdownCommands';
 import { useCanvasStore } from '@/stores/canvasStore'
 import { convertFileSrc } from '@tauri-apps/api/core'
 import { useProjectStore } from '@/stores/projectStore'
-
+import { openPath, openUrl } from '@tauri-apps/plugin-opener';
 
 const props = defineProps<{
     data: MarkdownPayload
@@ -28,7 +28,7 @@ const emit = defineEmits<{
     (e: 'command', key: string): void
 }>()
 
-// === 1. 阅读模式逻辑 (MarkdownIt) ===
+//#region === 1. 阅读模式逻辑 (MarkdownIt) ===
 const md = new MarkdownIt({ html: true, breaks: true, linkify: true })
 
 // 保存默认的渲染函数
@@ -37,6 +37,26 @@ const defaultImageRender = md.renderer.rules.image || function (tokens, idx, opt
 }
 
 const projectStore = useProjectStore()
+
+// 配置 Markdown-it 给链接添加 nodrag 类
+// 1. 保存默认的 link_open 渲染规则
+const defaultLinkRender = md.renderer.rules.link_open || function (tokens, idx, options, env, self) {
+    return self.renderToken(tokens, idx, options)
+}
+
+// 2. 覆盖规则
+md.renderer.rules.link_open = (tokens, idx, options, env, self) => {
+    const token = tokens[idx]
+
+    // 添加 'nodrag' 类：这是 Vue Flow 的关键词，阻止事件冒泡触发拖拽
+    const existingClass = token.attrGet('class') || ''
+    token.attrSet('class', `${existingClass} nodrag`.trim())
+
+    // 添加 target="_blank"
+    token.attrSet('target', '_blank')
+
+    return defaultLinkRender(tokens, idx, options, env, self)
+}
 
 md.renderer.rules.image = (tokens, idx, options, env, self) => {
     const token = tokens[idx]
@@ -80,9 +100,28 @@ md.renderer.rules.image = (tokens, idx, options, env, self) => {
     return defaultImageRender(tokens, idx, options, env, self)
 }
 
+// 允许点击链接，并使用 tauri api 打开
+async function onContentClick(e: MouseEvent) {
+    // 使用事件委托，检查点击的是否是链接
+    const target = e.target as HTMLElement
+    const link = target.closest('a')
+    if (link && link.href) {
+        // 1. 阻止 WebView 默认跳转 (非常重要！)
+        e.preventDefault()
+        // 2. 调用 Tauri 系统 API 打开浏览器
+        try {
+            await openUrl(link.href)
+        } catch (err) {
+            console.error('Failed to open link:', err)
+        }
+    }
+}
+
 const renderedHtml = computed(() => md.render(props.data.content || ''))
 
-// === 2. 编辑模式逻辑 (CodeMirror) ===
+//#endregion
+
+// #region === 2. 编辑模式逻辑 (CodeMirror) ===
 const editorRef = ref<HTMLElement | null>(null)
 let view: EditorView | null = null
 
@@ -146,6 +185,7 @@ function destroyEditor() {
     view?.destroy()
     view = null
 }
+//#endregion
 
 // 监听编辑状态切换
 // 当 isEditing = true 时，DOM 中会出现 editorRef，此时初始化 CM6
@@ -173,6 +213,8 @@ onMounted(() => {
 // 组件卸载时兜底清理
 onBeforeUnmount(() => destroyEditor())
 
+//#region 事件冒泡
+
 function onKeyDownCapture(e: KeyboardEvent) {
     if (e.key === 'Escape') {
         emit('blur')
@@ -196,7 +238,7 @@ function onKeyDownCapture(e: KeyboardEvent) {
     // 其他按键（如打字）放行给 CodeMirror
 }
 
-// [!code focus:35] 新增：交互事件处理
+// 除非需要滚动，否则不拦截滚轮事件（允许滚轮缩放）
 function onWheel(e: WheelEvent) {
     // 1. 找到真正滚动的容器 (CodeMirror 6 的滚动容器类名是 .cm-scroller)
     // 如果找不到，就找当前组件的根元素
@@ -214,6 +256,7 @@ function onWheel(e: WheelEvent) {
     }
 }
 
+// 允许中键 pan，阻止左键点击
 function onMouseDown(e: MouseEvent) {
     if (e.button === 1) {
         // === 中键点击 (Middle Click) ===
@@ -230,6 +273,8 @@ function onMouseDown(e: MouseEvent) {
         e.stopPropagation()
     }
 }
+
+//#endregion
 </script>
 
 <template>
@@ -243,7 +288,8 @@ function onMouseDown(e: MouseEvent) {
         @keypress.stop
         @keydown.stop
         @keyup.stop
-        @keydown.capture="onKeyDownCapture">
+        @keydown.capture="onKeyDownCapture"
+        @click="onContentClick">
         <div
             v-if="isEditing"
             ref="editorRef"
@@ -442,4 +488,24 @@ function onMouseDown(e: MouseEvent) {
 .md-wrapper:not(:hover) :deep(.cm-scroller)::-webkit-scrollbar-thumb {
   background-color: transparent;
 } */
+
+/* [!code focus:10] 核心修复 */
+:deep(a) {
+    /* 1. 强制允许响应鼠标 (关键!) */
+    /* 防止父级可能存在的 pointer-events: none 继承下来 */
+    pointer-events: auto !important;
+
+    /* 2. 提升层级上下文 */
+    /* 防止被同级的 absolute 遮罩层盖住 */
+    position: relative;
+    z-index: 10;
+
+    /* 3. 鼠标手势 */
+    cursor: pointer;
+}
+
+/* 确保预览层本身也是可交互的 */
+.preview-layer {
+    pointer-events: auto;
+}
 </style>

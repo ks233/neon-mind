@@ -1,33 +1,39 @@
 {
-  "$schema": "../gen/schemas/desktop-schema.json",
-  "identifier": "default",
-  "description": "Capability for the main window",
-  "windows": [
-    "main"
-  ],
-  "permissions": [
-    "core:default",
-    "opener:default",
-    "http:default",
-    {
-      "identifier": "http:default",
-      "allow": [
+    "$schema": "../gen/schemas/desktop-schema.json",
+    "identifier": "default",
+    "description": "Capability for the main window",
+    "windows": [
+        "main"
+    ],
+    "permissions": [
+        "core:default",
+        "opener:default",
+        "http:default",
         {
-          "url": "https://**"
+            "identifier": "http:default",
+            "allow": [
+                {
+                    "url": "https://**"
+                },
+                {
+                    "url": "http://**"
+                }
+            ],
+            "deny": []
         },
         {
-          "url": "http://**"
-        }
-      ],
-      "deny": []
-    },{
-        "identifier": "fs:scope",
-        "allow": [{"path": "**/*"}]
-    },
-    "dialog:default",
-    "fs:default",
-    "fs:allow-app-write",
-    "fs:allow-copy-file",
-    "core:window:allow-set-title"
-  ]
+            "identifier": "fs:scope",
+            "allow": [
+                {
+                    "path": "**/*"
+                }
+            ]
+        },
+        "dialog:default",
+        "fs:default",
+        "fs:allow-app-write",
+        "fs:allow-copy-file",
+        "core:window:allow-set-title",
+        "opener:allow-default-urls"
+    ]
 }
