@@ -17,12 +17,13 @@ import { useCanvasStore } from '@/stores/canvasStore'
 
 import { useDark, useMouse, useToggle } from '@vueuse/core'
 
-import { snapToGrid } from '@/utils/grid'
+import { snapToGrid, snapToGridXY } from '@/utils/grid'
 import { useGlobalInteractions } from './composables/useGlobalInteractions'
 import { useGlobalShortcuts } from './composables/useGlobalShortcuts'
 import { useProjectStore } from './stores/projectStore'
 import { useUiStore } from './stores/uiStore'
 import { LogicNode } from './types/model'
+import { NODE_CONSTANTS } from './config/layoutConfig'
 
 // #region 初始化
 
@@ -46,7 +47,7 @@ const canvasStore = useCanvasStore()
 const uiStore = useUiStore()
 
 // VueFlow 工具函数
-const { screenToFlowCoordinate, addEdges, updateEdge, getEdges } = useVueFlow()
+const { screenToFlowCoordinate, addEdges, updateEdge } = useVueFlow()
 
 const gridSize = ref<number>(20)
 const DETACH_DISTANCE = 60;
@@ -98,7 +99,7 @@ async function onDblClick(event: MouseEvent) {
 
 // #endregion
 
-// #region 监听变化
+// #region 创建和删除边
 
 function onConnect(params: Connection) {
     // params 包含了 source(起点ID), target(终点ID), sourceHandle(起点端点ID) 等信息
@@ -151,7 +152,7 @@ function onEdgeUpdateEnd(params: EdgeMouseEvent) {
 
 // #region 拖拽改变导图层级
 
-const { getIntersectingNodes, findNode } = useVueFlow()
+const { getIntersectingNodes, findNode, selectionKeyCode, d3Selection } = useVueFlow()
 
 const dragStartPos = ref({ x: 0, y: 0 })
 const lastDragPos = ref({ x: 0, y: 0 });
@@ -358,6 +359,166 @@ function onPaneReadyHandler(instance: any) {
     projectStore.newProject()
 }
 
+// 原有的背景点击 (用于退出编辑)
+function onPaneClick(event: any) {
+    // [!code focus:4] 只有左键点击背景才退出编辑
+    // Vue Flow 的 onPaneClick 有时会包含原始事件，做一个防御性检查
+    // 如果是中键拖拽产生的 click，这里通常不会触发，但为了保险起见：
+    if (uiStore.editingNodeId) {
+        uiStore.stopEditing()
+    }
+}
+
+//#region 双击创建
+
+// === 双击拖拽创建状态机 ===
+const DOUBLE_CLICK_DELAY = 300;
+const CLICK_DISTANCE_THRESHOLD = 10; // [!code focus] 新增：防抖动距离阈值
+const DRAG_THRESHOLD = 5;
+
+let lastClickTime = 0;
+let lastClickPos = { x: 0, y: 0 }; // [!code focus] 新增：记录上次点击位置
+let potentialDoubleClick = false;
+const isCreatingDrag = ref(false);
+const creatingStartPos = ref<XYPosition | null>(null);
+const creatingNodeId = ref<string | null>(null);
+
+// [!code focus:45] 1. 鼠标按下 (Capture阶段): 处理双击创建、排除节点干扰
+function onPanePointerDown(event: PointerEvent) {
+    // A. 过滤：只响应左键
+    if (event.button !== 0) return;
+
+    // B. [关键修复] 过滤：如果点到了节点、连线、面板，直接忽略
+    // 这样就不会拦截 节点拖拽、文本编辑、连线操作 了
+    const target = event.target as Element;
+    if (target.closest('.vue-flow__node') || target.closest('.vue-flow__edge') || target.closest('.vue-flow__panel')) {
+        potentialDoubleClick = false; // 打断双击链
+        return;
+    }
+
+    const now = Date.now();
+    const timeDiff = now - lastClickTime;
+    // 计算两次点击的距离
+    const dist = Math.hypot(event.clientX - lastClickPos.x, event.clientY - lastClickPos.y);
+
+    // C. 判断双击：时间短 + 距离近
+    if (timeDiff < DOUBLE_CLICK_DELAY && dist < CLICK_DISTANCE_THRESHOLD) {
+        potentialDoubleClick = true;
+
+        // 记录 Flow 坐标系的起点
+        creatingStartPos.value = snapToGridXY(screenToFlowCoordinate({
+            x: event.clientX,
+            y: event.clientY
+        }));
+
+        // [关键修复] 阻止默认行为 -> 防止触发 Vue Flow 的"蓝色框选"
+        event.preventDefault();
+        event.stopPropagation();
+        const el = event.target as Element;
+        if (el.setPointerCapture) {
+            el.setPointerCapture(event.pointerId);
+        }
+        // 注意：这里不需要 stopPropagation，因为 preventDefault 已经足够阻止框选
+    } else {
+        // 第一次点击，记录状态
+        lastClickTime = now;
+        lastClickPos = { x: event.clientX, y: event.clientY };
+        potentialDoubleClick = false;
+        isCreatingDrag.value = false;
+        creatingNodeId.value = null;
+        creatingStartPos.value = null;
+    }
+}
+
+// 2. 鼠标移动: 处理拖拽大小
+function onPanePointerMove(event: PointerEvent) {
+    if (!potentialDoubleClick || !creatingStartPos.value) return;
+
+    const currentPos = screenToFlowCoordinate({
+        x: event.clientX,
+        y: event.clientY
+    });
+
+    const dx = currentPos.x - creatingStartPos.value.x;
+    const dy = currentPos.y - creatingStartPos.value.y;
+
+    // A. 触发拖拽模式
+    if (!isCreatingDrag.value && (Math.abs(dx) > DRAG_THRESHOLD || Math.abs(dy) > DRAG_THRESHOLD)) {
+        isCreatingDrag.value = true;
+        // 创建初始节点
+        creatingNodeId.value = canvasStore.addMindMapRoot(creatingStartPos.value.x, creatingStartPos.value.y);
+    }
+
+    // B. [关键修复] 实时计算尺寸 (支持四个方向拖拽)
+    if (isCreatingDrag.value && creatingNodeId.value) {
+        // 1. 宽度/高度取绝对值，并限制最小尺寸
+        const rawWidth = snapToGrid(Math.abs(dx));
+        const rawHeight = snapToGrid(Math.abs(dy));
+        const width = Math.max(rawWidth, NODE_CONSTANTS.MIN_WIDTH);
+        const height = Math.max(rawHeight, NODE_CONSTANTS.MIN_HEIGHT);
+
+        // 2. 计算左上角坐标 (x, y)
+        // 逻辑：如果往左拖 (dx < 0)，x 应该是 (起点 - 宽度)；否则 x 是起点
+        // 这样起点就变成了"锚点"，向左拉会向左延伸，向右拉会向右延伸
+        let realX = creatingStartPos.value.x;
+        let realY = creatingStartPos.value.y;
+
+        if (dx < 0) realX = creatingStartPos.value.x - width;
+        if (dy < 0) realY = creatingStartPos.value.y - height;
+
+        canvasStore.updateNodeSize(creatingNodeId.value, { width, height }, { x: realX, y: realY }, false);
+    }
+}
+
+// 3. 鼠标松开: 结算
+function onPanePointerUp(event: PointerEvent) {
+    if (potentialDoubleClick) {
+        if (isCreatingDrag.value) {
+            console.log('拖拽创建完成');
+            if (creatingNodeId.value) {
+                // [优化] 拖拽结束时，记录一次历史记录 (updateNodeSize 内部是 false)
+                const node = canvasStore.model.nodes[creatingNodeId.value];
+                if (node) {
+                    canvasStore.updateNodePosition(node.id, { x: node.x, y: node.y }, true);
+                    uiStore.startEditing(node.id);
+                }
+            }
+        } else {
+            // 原地双击
+            if (creatingStartPos.value) {
+                const id = canvasStore.addMindMapRoot(creatingStartPos.value.x, creatingStartPos.value.y);
+                uiStore.startEditing(id);
+            }
+        }
+        // Reset
+        potentialDoubleClick = false;
+        isCreatingDrag.value = false;
+        creatingNodeId.value = null;
+        creatingStartPos.value = null;
+        lastClickTime = 0;
+
+        selectionKeyCode.value = true
+    }
+}
+
+function onPanePointerLeave() {
+    if (isCreatingDrag.value) {
+        potentialDoubleClick = false;
+        isCreatingDrag.value = false;
+        creatingNodeId.value = null;
+    }
+}
+//#endregion
+
+
+function onAppMouseDown(e: MouseEvent) {
+    // 如果是中键 (Button 1)
+    if (e.button === 1) {
+        // [关键修复] 不要用 .capture，让 Vue Flow 先响应 Pan，然后我们在冒泡阶段拦截默认行为
+        // 这样 d3-zoom 已经启动了，但浏览器不会把焦点移到 body，从而保持编辑器聚焦
+        e.preventDefault();
+    }
+}
 </script>
 
 <template>
@@ -365,18 +526,20 @@ function onPaneReadyHandler(instance: any) {
         {{ isDark ? '🌙' : '☀️' }}
     </button> -->
     <div class="app-container"
-        @contextmenu.prevent>
+        @pointerdown.capture="onPanePointerDown"
+        @mousedown.capture="onAppMouseDown"
+        @pointermove="onPanePointerMove"
+        @pointerup="onPanePointerUp"
+        @pointerleave="onPanePointerLeave">
         <VueFlow v-if="true"
             @pane-ready="onPaneReadyHandler"
             v-model:nodes="canvasStore.vueNodes"
             v-model:edges="canvasStore.vueEdges"
             :node-types="nodeTypes"
-            @dblclick="onDblClick"
             :zoom-on-double-click="false"
             :fit-view-on-init="false"
             @connect="onConnect"
             :pan-on-drag="[1, 2]"
-            :selection-key-code="true"
             multi-selection-key-code="Control"
             :default-edge-options="{
                 type: 'smoothstep',
@@ -385,12 +548,13 @@ function onPaneReadyHandler(instance: any) {
             }"
             :min-zoom="0.2"
             :max-zoom="4"
+            :selection-key-code="false"
             :selection-mode="SelectionMode.Partial"
             :edges-updatable="true"
             @edge-update-start="onEdgeUpdateStart"
             @edge-update="onEdgeUpdate"
             @edge-update-end="onEdgeUpdateEnd"
-
+            @pane-click="onPaneClick"
             @node-drag-start="onNodeDragStart"
             @node-drag="onNodeDrag"
             @node-drag-stop="onNodeDragStop"

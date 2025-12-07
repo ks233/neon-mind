@@ -195,6 +195,41 @@ function onKeyDownCapture(e: KeyboardEvent) {
     }
     // 其他按键（如打字）放行给 CodeMirror
 }
+
+// [!code focus:35] 新增：交互事件处理
+function onWheel(e: WheelEvent) {
+    // 1. 找到真正滚动的容器 (CodeMirror 6 的滚动容器类名是 .cm-scroller)
+    // 如果找不到，就找当前组件的根元素
+    const scroller = editorRef.value?.querySelector('.cm-scroller') || editorRef.value
+
+    if (scroller) {
+        // 允许 1px 的误差 (浏览器缩放时可能有小数)
+        const isOverflowing = scroller.scrollHeight > scroller.clientHeight + 1
+
+        // 只有当内容真正溢出需要滚动时，才拦截事件
+        if (isOverflowing) {
+            e.stopPropagation()
+        }
+        // 否则：放行事件 -> 冒泡给 Vue Flow -> 触发画布缩放
+    }
+}
+
+function onMouseDown(e: MouseEvent) {
+    if (e.button === 1) {
+        // === 中键点击 (Middle Click) ===
+        // 1. 阻止默认行为：防止出现浏览器原生滚动图标，防止焦点被抢走导致 blur
+        e.preventDefault()
+
+        // 2. 【关键】放行事件冒泡
+        // 让 Vue Flow 接收到这个 mousedown，从而启动画布平移 (Pan)
+        // 因为我们 preventDefault 了，所以编辑器不会失去焦点
+
+    } else {
+        // === 左键点击 (Left Click) ===
+        // 拦截冒泡：我们要选中文本，不要让 Vue Flow 以为我们在拖拽节点
+        e.stopPropagation()
+    }
+}
 </script>
 
 <template>
@@ -213,9 +248,9 @@ function onKeyDownCapture(e: KeyboardEvent) {
             v-if="isEditing"
             ref="editorRef"
             class="cm-container"
-            @mousedown.stop
+            @mousedown="onMouseDown"
             @scroll.stop
-            @wheel.stop></div>
+            @wheel="onWheel"></div>
 
         <div
             v-else
@@ -276,7 +311,7 @@ function onKeyDownCapture(e: KeyboardEvent) {
     color: var(--md-h1-color);
     margin: var(--md-h1-margin);
     line-height: 1.2;
-    border-bottom: 1px solid var(--border-color);
+    border-bottom: 1px solid color-mix(in srgb, var(--border-color), transparent 50%);
 }
 
 .markdown-body :deep(h2) {
@@ -285,7 +320,7 @@ function onKeyDownCapture(e: KeyboardEvent) {
     color: var(--md-h2-color);
     margin: var(--md-h2-margin);
     line-height: 1.3;
-    border-bottom: 1px solid var(--border-color);
+    border-bottom: 1px solid color-mix(in srgb, var(--border-color), transparent 50%);
 }
 
 .markdown-body :deep(h3) {
@@ -349,7 +384,8 @@ function onKeyDownCapture(e: KeyboardEvent) {
 .markdown-body :deep(ul),
 .markdown-body :deep(ol) {
     padding-left: 1.2em;
-    /* margin: 0.6em 0; */
+    margin-top: 0.5em;
+    margin-bottom: 0.5em;
 }
 
 

@@ -12,7 +12,7 @@
 /* 3. 黄 */
 .theme-yellow {
     --border-color: #f5d65a;
-    --node-bg: #382f21;
+    --node-bg: #332a1e;
 }
 
 /* 4. 绿 */
@@ -24,7 +24,7 @@
 /* 5. 蓝 */
 .theme-blue {
     --border-color: #3ab4b4;
-    --node-bg: #113546;
+    --node-bg: #0f2733;
 }
 
 /* 6. 紫 */
@@ -35,7 +35,7 @@
 
 .theme-pink {
     --border-color: #e656aa;
-    --node-bg: #381f2d;
+    --node-bg: #331d2a;
 }
 
 .theme-grey {

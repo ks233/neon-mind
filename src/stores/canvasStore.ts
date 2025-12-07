@@ -304,9 +304,9 @@ export const useCanvasStore = defineStore('canvas', () => {
 
 
     // 添加思维导图根节点
-    async function addMindMapRoot(x: number, y: number) {
+    function addMindMapRoot(x: number, y: number) {
         const id = crypto.randomUUID();
-        await execute(draft => {
+        execute(draft => {
             const newNode: MarkdownPayload = {
                 id,
                 structure: 'root',
@@ -554,7 +554,7 @@ export const useCanvasStore = defineStore('canvas', () => {
         }, recordHistory)
     }
 
-    function updateNodeSize(id: string, size: { width: number, height: number }, position: XYPosition) {
+    function updateNodeSize(id: string, size: { width: number, height: number }, position: XYPosition, recordHistory = true) {
         execute(draft => {
             const node = draft.nodes[id];
             if (node) {
@@ -566,7 +566,7 @@ export const useCanvasStore = defineStore('canvas', () => {
                 // 使用防抖 (Debounce) 或直接调用，取决于性能要求
                 debouncedLayout();
             }
-        })
+        }, recordHistory)
     }
 
     // 更新内容
