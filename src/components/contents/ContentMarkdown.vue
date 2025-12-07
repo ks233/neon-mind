@@ -27,9 +27,31 @@ const emit = defineEmits<{
     (e: 'blur'): void
     (e: 'command', key: string): void
 }>()
-
+// [!code focus:3] 1. 引入 highlight.js 核心和样式
+import hljs from 'highlight.js'
+// 你可以在 node_modules/highlight.js/styles/ 下挑选喜欢的颜色主题，例如 github.css, atom-one-dark.css 等
+import 'highlight.js/styles/atom-one-dark.css'
 //#region === 1. 阅读模式逻辑 (MarkdownIt) ===
-const md = new MarkdownIt({ html: true, breaks: true, linkify: true })
+const md = new MarkdownIt(
+    {
+        html: true,
+        breaks: true,
+        linkify: true,
+        highlight: function (str, lang) {
+            if (lang && hljs.getLanguage(lang)) {
+                try {
+                    // 使用 highlight.js 进行解析
+                    return '<pre class="hljs"><code>' +
+                        hljs.highlight(str, { language: lang, ignoreIllegals: true }).value +
+                        '</code></pre>';
+                } catch (__) { }
+            }
+
+            // 默认回退：普通转义
+            return '<pre class="hljs"><code>' + md.utils.escapeHtml(str) + '</code></pre>';
+        }
+    }
+)
 
 // 保存默认的渲染函数
 const defaultImageRender = md.renderer.rules.image || function (tokens, idx, options, env, self) {
@@ -409,16 +431,24 @@ function onMouseDown(e: MouseEvent) {
     padding-left: 10px;
     color: var(--md-quote-color);
     margin: 0.5em 0;
+    padding: 0 1em;
+    background-color: #00000049;
 }
 
 /* 代码 */
+
 .markdown-body :deep(code) {
     font-family: var(--md-code-font);
-    background-color: var(--md-code-bg);
     color: var(--md-code-color);
     border-radius: var(--md-code-radius);
     padding: 0 4px;
 }
+
+.markdown-body :deep(code):not(pre code) {
+    background-color: var(--md-code-bg);
+}
+
+
 
 /* 链接 */
 .markdown-body :deep(a) {
@@ -507,5 +537,58 @@ function onMouseDown(e: MouseEvent) {
 /* 确保预览层本身也是可交互的 */
 .preview-layer {
     pointer-events: auto;
+}
+
+
+/* [!code focus:50] === Markdown 表格与代码块样式 === */
+
+/* 注意：v-html 生成的内容需要使用 :deep() 选择器 */
+
+/* --- 表格样式 (类似 GitHub 风格) --- */
+:deep(table) {
+    border-spacing: 0;
+    border-collapse: collapse;
+    width: 100%;
+    margin: 10px 0;
+    overflow: auto;
+    /* 防止表格过宽撑破节点 */
+    display: block;
+    /* 允许横向滚动 */
+    overflow: hidden;
+}
+
+:deep(th),
+:deep(td) {
+    padding: 2px 6px;
+    border: 1px solid #8f8f8f;
+}
+
+:deep(th) {
+    font-weight: 600;
+    background-color: #ffffff13;
+}
+
+:deep(tr) {
+    background-color: #00000059;
+}
+
+/* --- 代码块样式 --- */
+:deep(pre) {
+    padding: 12px;
+    overflow: auto;
+    font-size: 85%;
+    line-height: 1.45;
+    background-color: var(--md-code-bg);
+    border-radius: 6px;
+    margin: 10px 0;
+    font-family: var(--md-code-font) !important;
+    /* overflow: hidden; */
+    /* 核心修改：强制换行 */
+    white-space: pre-wrap;
+    /* 保留空格和换行符，但是允许自动换行 */
+    word-wrap: break-word;
+    /* 在长单词处断行 */
+    overflow-wrap: break-word;
+    /* 兼容性更好的断行写法 */
 }
 </style>

@@ -480,13 +480,14 @@ function onPanePointerUp(event: PointerEvent) {
                 const node = canvasStore.model.nodes[creatingNodeId.value];
                 if (node) {
                     canvasStore.updateNodePosition(node.id, { x: node.x, y: node.y }, true);
-                    uiStore.startEditing(node.id);
+                    // uiStore.startEditing(node.id);
                 }
             }
         } else {
             // 原地双击
             if (creatingStartPos.value) {
                 const id = canvasStore.addMindMapRoot(creatingStartPos.value.x, creatingStartPos.value.y);
+                uiStore.selectNodeById(id)
                 uiStore.startEditing(id);
             }
         }

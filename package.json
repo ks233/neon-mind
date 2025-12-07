@@ -28,6 +28,7 @@
     "@vue-flow/node-resizer": "^1.5.0",
     "@vueuse/core": "^14.1.0",
     "cheerio": "^1.1.2",
+    "highlight.js": "^11.11.1",
     "immer": "^11.0.1",
     "markdown-it": "^14.1.0",
     "maxrects-packer": "^2.7.3",
