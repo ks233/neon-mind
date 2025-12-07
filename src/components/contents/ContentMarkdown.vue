@@ -31,6 +31,7 @@ import hljs from 'highlight.js'
 // 你可以在 node_modules/highlight.js/styles/ 下挑选喜欢的颜色主题，例如 github.css, atom-one-dark.css 等
 import 'highlight.js/styles/atom-one-dark.css'
 import { smartWordExtension } from './smartWordExt'
+import { autoSpaceExtension } from './autoSpaceExt'
 //#region === 1. 阅读模式逻辑 (MarkdownIt) ===
 const md = new MarkdownIt(
     {
@@ -191,7 +192,8 @@ function initEditor() {
             }),
             markdownKeymapExtension,
             // 1. 注册智能分词按键映射 (优先级通常较高，因为它在后面添加)
-            smartWordExtension
+            smartWordExtension,
+            autoSpaceExtension
         ]
     })
 

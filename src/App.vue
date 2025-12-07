@@ -20,10 +20,10 @@ import { useDark, useMouse, useToggle } from '@vueuse/core'
 import { snapToGrid, snapToGridXY } from '@/utils/grid'
 import { useGlobalInteractions } from './composables/useGlobalInteractions'
 import { useGlobalShortcuts } from './composables/useGlobalShortcuts'
+import { NODE_CONSTANTS } from './config/layoutConfig'
 import { useProjectStore } from './stores/projectStore'
 import { useUiStore } from './stores/uiStore'
 import { LogicNode } from './types/model'
-import { NODE_CONSTANTS } from './config/layoutConfig'
 
 // #region 初始化
 
@@ -487,8 +487,8 @@ function onPanePointerUp(event: PointerEvent) {
             // 原地双击
             if (creatingStartPos.value) {
                 const id = canvasStore.addMindMapRoot(creatingStartPos.value.x, creatingStartPos.value.y);
-                uiStore.selectNodeById(id)
                 uiStore.startEditing(id);
+                setTimeout(() => uiStore.selectNodeById(id), 0)
             }
         }
         // Reset
