@@ -24,6 +24,7 @@ import { NODE_CONSTANTS } from './config/layoutConfig'
 import { useProjectStore } from './stores/projectStore'
 import { useUiStore } from './stores/uiStore'
 import { LogicNode } from './types/model'
+import { useClipboard } from './composables/useClipboard'
 
 // #region 初始化
 
@@ -38,8 +39,8 @@ const nodeTypes: NodeTypesObject = {
 }
 
 useGlobalInteractions()
-
 useGlobalShortcuts()
+useClipboard(); // 启用复制粘贴
 
 // 数据单例
 const projectStore = useProjectStore();
