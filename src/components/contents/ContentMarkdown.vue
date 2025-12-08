@@ -32,13 +32,18 @@ import hljs from 'highlight.js'
 import 'highlight.js/styles/atom-one-dark.css'
 import { smartWordExtension } from './smartWordExt'
 import { autoSpaceExtension } from './autoSpaceExt'
+import taskLists from 'markdown-it-task-lists'
+import { useCanvasStore } from '@/stores/canvasStore'
+
+const projectStore = useProjectStore()
+
 //#region === 1. 阅读模式逻辑 (MarkdownIt) ===
 const md = new MarkdownIt(
     {
         html: true,
         breaks: true,
         linkify: true,
-        highlight: function (str, lang) {
+        highlight: function (str, lang): string {
             if (lang && hljs.getLanguage(lang)) {
                 try {
                     // 使用 highlight.js 进行解析
@@ -59,11 +64,15 @@ const defaultImageRender = md.renderer.rules.image || function (tokens, idx, opt
     return self.renderToken(tokens, idx, options)
 }
 
-const projectStore = useProjectStore()
-
 // 配置 Markdown-it 给链接添加 nodrag 类
 // 1. 保存默认的 link_open 渲染规则
 const defaultLinkRender = md.renderer.rules.link_open || function (tokens, idx, options, env, self) {
+    return self.renderToken(tokens, idx, options)
+}
+
+md.use(taskLists, { enabled: true })
+
+const defaultListItemRender = md.renderer.rules.list_item_open || function (tokens, idx, options, env, self) {
     return self.renderToken(tokens, idx, options)
 }
 
@@ -123,6 +132,19 @@ md.renderer.rules.image = (tokens, idx, options, env, self) => {
     return defaultImageRender(tokens, idx, options, env, self)
 }
 
+// 覆盖渲染规则
+md.renderer.rules.list_item_open = (tokens, idx, options, env, self) => {
+    const token = tokens[idx]
+
+    // token.map 存放了 [startLine, endLine] (0-based index)
+    if (token.map) {
+        // 将行号注入到 li 标签的 data-line 属性中
+        token.attrSet('data-line', String(token.map[0]))
+    }
+
+    return defaultListItemRender(tokens, idx, options, env, self)
+}
+
 // 允许点击链接，并使用 tauri api 打开
 async function onContentClick(e: MouseEvent) {
     // 使用事件委托，检查点击的是否是链接
@@ -138,6 +160,75 @@ async function onContentClick(e: MouseEvent) {
             console.error('Failed to open link:', err)
         }
     }
+}
+
+const canvasStore = useCanvasStore()
+
+// [!code focus:18] 新增：处理复选框状态变化
+function onTaskChange(e: Event) {
+    const target = e.target as HTMLInputElement
+    if (target.type !== 'checkbox') return
+
+    e.preventDefault() // 阻止 UI 默认变化，等待数据驱动更新
+
+    // [!code focus:12] === 核心修复：从父级 li 获取行号 ===
+    // 1. 向上寻找最近的 li 标签
+    const listItem = target.closest('li')
+
+    // 2. 获取行号 (Markdown-it 的行号通常是 0-based)
+    const lineAttr = listItem?.dataset.line
+    const lineNum = lineAttr ? parseInt(lineAttr) : -1
+
+    console.log(lineNum)
+    if (lineNum === -1) {
+        console.warn('无法定位任务所在行')
+        return
+    }
+
+    // 3. 获取当前 Markdown 内容并切换状态
+    const currentContent = props.data.content || ''
+    console.log(currentContent, lineNum, target.checked)
+    const newContent = toggleTask(currentContent, lineNum, target.checked)
+    console.log(newContent)
+    // 4. 更新 Store (这里假设你有这个方法)
+    canvasStore.updateNodeContent(props.data.id, newContent)
+}
+
+/**
+ * 切换指定行的任务状态
+ * @param content 完整 Markdown
+ * @param lineIndex 行号 (0-based)
+ * @param checked 目标状态
+ */
+function toggleTask(content: string, lineIndex: number, checked: boolean): string {
+    const lines = content.split('\n')
+
+    // 越界检查
+    if (lineIndex < 0 || lineIndex >= lines.length) return content
+
+    const line = lines[lineIndex]
+
+    // 正则解析：
+    // ^(\s*)   -> 捕获开头的缩进 (Group 1)
+    // ([-*+])  -> 捕获列表符 -, *, + (Group 2)
+    // \s+      -> 空格
+    // \[(.)\]  -> 捕获方括号内的字符 (Group 3)
+    // (.*)     -> 剩余内容 (Group 4)
+    const regex = /^(\s*)([-*+])\s+\[(.)\](.*)/
+    const match = line.match(regex)
+
+    if (match) {
+        const indent = match[1]
+        const listChar = match[2]
+        // const oldState = match[3]
+        const text = match[4]
+
+        // 构造新行：保持缩进和列表符不变，只改变 [x]
+        const newMark = checked ? '[x]' : '[ ]'
+        lines[lineIndex] = `${indent}${listChar} ${newMark}${text}`
+    }
+
+    return lines.join('\n')
 }
 
 const renderedHtml = computed(() => md.render(props.data.content || ''))
@@ -318,7 +409,8 @@ function onMouseDown(e: MouseEvent) {
         @keydown.stop
         @keyup.stop
         @keydown.capture="onKeyDownCapture"
-        @click="onContentClick">
+        @click="onContentClick"
+        @change="onTaskChange">
         <div
             v-if="isEditing"
             ref="editorRef"
@@ -567,16 +659,16 @@ function onMouseDown(e: MouseEvent) {
 :deep(th),
 :deep(td) {
     padding: 2px 6px;
-    border: 1px solid #8f8f8f;
+    border: 1px solid var(--border-color);
 }
 
 :deep(th) {
     font-weight: 600;
-    background-color: #ffffff13;
+    background-color: #00000020;
 }
 
 :deep(tr) {
-    background-color: #00000059;
+    background-color: #00000020;
 }
 
 /* --- 代码块样式 --- */
@@ -597,5 +689,77 @@ function onMouseDown(e: MouseEvent) {
     /* 在长单词处断行 */
     overflow-wrap: break-word;
     /* 兼容性更好的断行写法 */
+}
+
+/* [!code focus:60] === 修复后的任务列表样式 === */
+
+/* 1. 针对包含任务列表的 ul (插件通常会添加 contains-task-list 类，如果没有，ul 也会生效) */
+:deep(.contains-task-list),
+:deep(ul:has(.task-list-item)) {
+    list-style: none !important;
+    /* 核心：强制去掉小圆点 */
+    padding-left: 0 !important;
+    /* 去掉默认缩进，由 li 自己控制 */
+}
+
+/* 2. 任务项容器 (li) */
+:deep(.task-list-item) {
+    position: relative;
+    /* 为绝对定位的 checkbox 提供锚点 */
+    padding-left: 1.6em;
+    /* 核心：给左侧留出空间，防止文字和 checkbox 重叠 */
+    /* margin-bottom: 0.4em; */
+    /* 增加项之间的间距 */
+    list-style-type: none !important;
+    /* 双重保险：去掉小圆点 */
+}
+
+/* 3. 复选框本体 (input) */
+:deep(.task-list-item-checkbox) {
+    /* A. 抹除原生样式 */
+    -webkit-appearance: none;
+    appearance: none;
+    margin: 0;
+    outline: none;
+
+    /* B. 定义位置和尺寸 */
+    position: absolute;
+    left: 0.2em;
+    /* 放在 padding-left 留出的空位里 */
+    top: 0.3em;
+    /* 根据文字大小微调垂直位置 */
+    width: 1.1em;
+    height: 1.1em;
+
+    /* C. 绘制未选中状态 (方框) */
+    border: 1.5px solid var(--border-color);
+    border-radius: 2px;
+    background-color: #0000;
+    cursor: pointer;
+    transition: all 0.2s ease;
+
+    /* 确保可点击 */
+    pointer-events: auto !important;
+    z-index: 10;
+}
+
+/* 悬停效果 */
+:deep(.task-list-item-checkbox:hover) {
+    border-color: var(--border-color);
+    background-color: #00000000;
+}
+
+/* 4. 选中状态 (input:checked) */
+:deep(.task-list-item-checkbox:checked) {
+    background-color: #00000000;
+    /* 蓝色背景 */
+    border-color: var(--border-color);
+
+    /* D. 使用 SVG 绘制对勾 (最清晰的方案) */
+    /* 这是一个白色的对勾图标 */
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='white'%3E%3Cpath d='M13.78 4.22a.75.75 0 0 1 0 1.06l-7.25 7.25a.75.75 0 0 1-1.06 0L2.22 9.28a.75.75 0 0 1 1.06-1.06L6 10.94l6.72-6.72a.75.75 0 0 1 1.06 0z'/%3E%3C/svg%3E");
+    background-position: center;
+    background-repeat: no-repeat;
+    background-size: 80%;
 }
 </style>

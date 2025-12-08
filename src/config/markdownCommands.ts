@@ -1,8 +1,6 @@
 // src/config/markdown-commands.ts
 
-import { EditorState, EditorSelection, Transaction } from '@codemirror/state';
-import { EditorView, KeyBinding } from '@codemirror/view';
-import { keymap } from '@codemirror/view';
+import { EditorView, KeyBinding, keymap } from '@codemirror/view';
 
 /**
  * 通用命令：切换选区周围的 Markdown 标记
@@ -11,7 +9,7 @@ import { keymap } from '@codemirror/view';
  */
 const toggleMarkCommand = (prefix: string, suffix: string) => ({ state, dispatch }: EditorView): boolean => {
     if (!dispatch) return false;
-    
+
     // 获取当前选区
     const changes: { from: number, to: number, insert: string }[] = [];
     const selection = state.selection.main;
@@ -49,14 +47,14 @@ const toggleMarkCommand = (prefix: string, suffix: string) => ({ state, dispatch
         newFrom = from + prefix.length;
         newTo = to + prefix.length;
     }
-    
+
     // 创建事务并更新状态
     const transaction = state.update({
         changes,
         selection: { anchor: newFrom, head: newTo },
         scrollIntoView: true,
     });
-    
+
     dispatch(transaction);
     return true;
 };
@@ -72,27 +70,27 @@ export const toggleInlineCode = toggleMarkCommand('`', '`');
 // [!code focus:22] 定义 CodeMirror Keymap
 // 使用 'Mod' 自动适配 Ctrl (Windows/Linux) 或 Cmd (Mac)
 export const markdownKeymap: readonly KeyBinding[] = [
-    { 
-        key: 'Mod-b', 
-        run: toggleBold, 
+    {
+        key: 'Mod-b',
+        run: toggleBold,
         preventDefault: true,
         // 确保快捷键在输入法激活时也能运行 (可选)
         // mac: 'Mod-b', win: 'Mod-b' 
     },
-    { 
-        key: 'Mod-i', 
-        run: toggleItalic, 
-        preventDefault: true 
+    {
+        key: 'Mod-i',
+        run: toggleItalic,
+        preventDefault: true
     },
-    { 
+    {
         key: 'Mod-d', // 约定为删除线
-        run: toggleStrikethrough, 
-        preventDefault: true 
+        run: toggleStrikethrough,
+        preventDefault: true
     },
-    { 
+    {
         key: 'Mod-k', // 约定为行内代码
-        run: toggleInlineCode, 
-        preventDefault: true 
+        run: toggleInlineCode,
+        preventDefault: true
     },
     // 你可以继续添加其他命令，例如 Mod-Shift-8 (无序列表)
 ];
