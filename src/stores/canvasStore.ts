@@ -2,7 +2,7 @@ import type { Connection, Edge, Node, XYPosition } from '@vue-flow/core';
 import { MarkerType } from '@vue-flow/core';
 import { defineStore } from 'pinia';
 import { ref, shallowRef } from 'vue';
-import type { CanvasModel, ImagePayload, LinkPayload, LogicNode, MarkdownPayload } from '../types/model';
+import type { CanvasModel, ImagePayload, LinkPayload, LogicNode, MarkdownPayload, VisualSnapshot } from '../types/model';
 
 import { calculateMaxRectsPack, computeMindMapLayout, NodeGeometry } from '@/services/layoutService';
 
@@ -11,6 +11,7 @@ import { fetchLinkMetadata } from '@/services/linkService';
 import { useDebounceFn } from '@vueuse/core';
 
 import { applyPatches, enableMapSet, enablePatches, produce, type Patch } from 'immer';
+import { ClipboardService } from '@/services/clipboardService';
 
 // 开启 Set/Map 支持 (你的 model 用到了 Set)
 enableMapSet();
@@ -880,6 +881,17 @@ export const useCanvasStore = defineStore('canvas', () => {
         return results;
     }
 
+    // 辅助：获取所有后代 ID
+    function getDescendantIdsSet(nodeId: string, results: Set<string>) {
+        const node = model.value.nodes[nodeId];
+        if (node && node.childrenIds) {
+            node.childrenIds.forEach(childId => {
+                results.add(childId);
+                getDescendantIdsSet(childId, results);
+            });
+        }
+    }
+
     function isRoot(id: string) {
         return model.value.rootNodes.has(id);
     }
@@ -909,6 +921,209 @@ export const useCanvasStore = defineStore('canvas', () => {
                 }
             });
         });
+    }
+    //#endregion
+
+    //#region 复制粘贴
+    // 辅助：深拷贝并填充 GraphNode 的真实视图属性
+    // 辅助：递归序列化，使用传入的 visualMap 获取真实坐标
+    function serializeNodeTree(
+        nodeId: string,
+        visualMap: Map<string, VisualSnapshot>, // [!code focus] 依赖注入
+        visitedIds: Set<string>
+    ): LogicNode | null {
+        const logicNode = model.value.nodes[nodeId];
+        if (!logicNode) return null;
+        if (visitedIds.has(nodeId)) return null;
+        visitedIds.add(nodeId);
+
+        // 1. 创建副本
+        const nodeCopy = { ...logicNode };
+
+        // 2. [核心] 从 visualMap 读取真实视图属性覆盖 LogicNode
+        const visual = visualMap.get(nodeId);
+        if (visual) {
+            // 这是一个瞬间的"固化"过程
+            nodeCopy.x = visual.x;
+            nodeCopy.y = visual.y;
+            if (visual.width) nodeCopy.width = visual.width;
+            if (visual.height) nodeCopy.height = visual.height;
+        }
+
+        // 3. 递归处理子节点
+        // 我们不需要在这里把树展平，我们只需要返回这个节点对象
+        // 它的 childrenIds 依然指向旧 ID，这没关系，paste 的时候会重建
+        return nodeCopy;
+    }
+
+    /**
+     * 复制选中节点
+     * @param selectedIds 选中的节点 ID 列表
+     * @param visualMap 当前画布所有节点的视觉快照 (由 View 层传入)
+     */
+    async function copySelection(
+        selectedIds: string[],
+        visualMap: Map<string, VisualSnapshot> // [!code focus]
+    ) {
+        if (selectedIds.length === 0) return;
+        const selectedSet = new Set(selectedIds);
+
+        // 1. [核心过滤]：只复制"选区根节点"
+        // 如果一个节点的父节点也在选区中，则跳过该节点（因为它会被父节点的递归包含）
+        const rootsToCopy = selectedIds.filter(id => {
+            const node = model.value.nodes[id];
+            if (!node) return false;
+            // 如果有父节点，且父节点也在选中列表中 -> 我不是根，跳过
+            if (node.parentId && selectedSet.has(node.parentId)) {
+                return false;
+            }
+            return true;
+        });
+
+        // 2. 收集所有需要复制的节点 ID (包含子孙)
+        const finalIdsToCopy = new Set<string>();
+        rootsToCopy.forEach(rootId => {
+            finalIdsToCopy.add(rootId);
+            getDescendantIdsSet(rootId, finalIdsToCopy);
+        });
+
+        // 3. 序列化
+        const nodesData: LogicNode[] = [];
+        // 这里需要传一个新的 visited 集合，防止跨树的循环引用
+        const visited = new Set<string>();
+
+        finalIdsToCopy.forEach(id => {
+            const serialized = serializeNodeTree(id, visualMap, visited);
+            if (serialized) nodesData.push(serialized);
+        });
+
+        // 4. 调用 Service 持久化
+        if (nodesData.length > 0) {
+            await ClipboardService.copyNodes(nodesData);
+        }
+    }
+
+    // Action: 粘贴
+    async function pasteFromClipboard(mousePos?: { x: number, y: number }) {
+        // 1. 读取剪贴板内容
+        const result = await ClipboardService.readClipboard();
+
+        // 2. 根据类型分发
+        if (result.type === 'nodes') {
+            const nodes = result.data as LogicNode[];
+            if (nodes.length > 0) {
+                // 调用之前的 pasteNodes 逻辑
+                pasteNodes(nodes, mousePos);
+            }
+        }
+        else if (result.type === 'image') {
+            // 处理图片粘贴 (result.data 是 Tauri Image)
+            // 你需要将 Image 转为 ObjectURL 或保存到本地
+            // 这里假设 addContentNode 支持 Blob 或 base64
+            // const blob = new Blob([result.data.rgba()], ...) // 比较复杂
+            // 简单做法：直接用 addContentNode 占位，实际图片处理需要 ImageService
+            console.log("Paste Image detected (Implementation needed in ImageService)");
+            // 建议：转成 Base64 或 Blob Url
+            const currentPos = mousePos || { x: 0, y: 0 };
+            // 假设 addContentNode 支持 base64
+            // addContentNode('image', ...);
+        }
+        else if (result.type === 'link') {
+            const currentPos = mousePos || { x: 0, y: 0 };
+            addContentNode('link', result.data, currentPos);
+        }
+        else if (result.type === 'text') {
+            const currentPos = mousePos || { x: 0, y: 0 };
+            // 创建 Markdown 节点
+            const id = addMindMapRoot(currentPos.x, currentPos.y);
+            updateNodeContent(id, result.data);
+        }
+    }
+
+    function pasteNodes(nodes: LogicNode[], mousePos?: { x: number, y: number }) {
+        if (nodes.length === 0) return;
+
+        execute((draft) => {
+            // 1. 准备 ID 映射 (Old -> New)
+            const idMap = new Map<string, string>();
+            nodes.forEach(n => idMap.set(n.id, crypto.randomUUID()));
+
+            // 2. 计算整体偏移量
+            // 找出这一批节点里的"根" (没有父级，或者父级不在这一批里)
+            const copyRoots = nodes.filter(n => !n.parentId || !idMap.has(n.parentId));
+
+            // 计算这些根节点的包围盒左上角
+            const minX = Math.min(...copyRoots.map(n => n.x));
+            const minY = Math.min(...copyRoots.map(n => n.y));
+
+            // 目标位置偏移
+            // 如果有 mousePos，则把包围盒左上角移动到 mousePos
+            // 否则，在原位置偏移 20px
+            const offsetX = mousePos ? (mousePos.x - minX) : 20;
+            const offsetY = mousePos ? (mousePos.y - minY) : 20;
+
+            // 3. 重建节点并写入 Draft
+            nodes.forEach(oldNode => {
+                const newId = idMap.get(oldNode.id)!;
+
+                // 3.1 处理父级引用
+                let newParentId: string | undefined = undefined;
+                let structure = oldNode.structure;
+
+                if (oldNode.parentId && idMap.has(oldNode.parentId)) {
+                    // 如果父节点也在这次粘贴列表中，则维持父子关系
+                    newParentId = idMap.get(oldNode.parentId);
+                    structure = 'node'; // 保持为子节点
+                } else {
+                    // 否则，它变成了新的游离根节点
+                    newParentId = undefined;
+                    structure = 'root';
+                }
+
+                // 3.2 处理子级引用
+                const newChildrenIds = (oldNode.childrenIds || [])
+                    .map(childId => idMap.get(childId))
+                    .filter(id => id !== undefined) as string[];
+
+                // 3.3 计算新坐标
+                // 只有 CopyRoots 需要应用 offset。
+                // 子节点的坐标如果是相对的(VueFlow GraphNode position是相对的)，则保持不变？
+                // ⚠️ 注意：我们在 copySelection 里存的是 GraphNode.position。
+                // 在 Vue Flow 中，子节点的 position 是相对于父节点的。
+                // 所以：如果新节点依然有父节点 (newParentId 存在)，则 x/y 保持不变 (相对位置不变)。
+                // 如果新节点变成了根节点 (!newParentId)，则应用 offset (移动到鼠标处)。
+
+                let newX = oldNode.x;
+                let newY = oldNode.y;
+
+                if (!newParentId) {
+                    newX += offsetX;
+                    newY += offsetY;
+                }
+
+                // 3.4 构造新节点
+                const newNode: LogicNode = {
+                    ...oldNode,
+                    id: newId,
+                    parentId: newParentId,
+                    childrenIds: newChildrenIds,
+                    structure: structure as 'root' | 'node',
+                    x: newX,
+                    y: newY,
+                    // 确保清除选中状态
+                    // class: oldNode.class ? oldNode.class.replace('selected', '') : '' 
+                };
+
+                draft.nodes[newId] = newNode;
+
+                if (structure === 'root') {
+                    draft.rootNodes.add(newId);
+                }
+            });
+        });
+
+        // 4. 选中新粘贴的节点 (选那些新的根节点)
+        // ... logic to select new nodes
     }
     //#endregion
 
@@ -950,6 +1165,12 @@ export const useCanvasStore = defineStore('canvas', () => {
         // 辅助
         getDescendantIds,
         isRoot,
-        packNodes
+        // 排版
+        packNodes,
+        // 复制粘贴
+        pasteNodes,
+        copySelection,
+        pasteFromClipboard
+
     };
 });

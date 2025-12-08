@@ -85,3 +85,10 @@ export interface CanvasFile {
     };
     model: CanvasModel; // 你的核心数据
 }
+
+export interface VisualSnapshot {
+    x: number;      // 真实绝对坐标
+    y: number;      // 真实绝对坐标
+    width?: number; // 真实渲染宽度
+    height?: number;// 真实渲染高度
+}
