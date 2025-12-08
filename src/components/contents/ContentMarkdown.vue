@@ -29,15 +29,16 @@ const emit = defineEmits<{
 // [!code focus:3] 1. 引入 highlight.js 核心和样式
 import hljs from 'highlight.js'
 // 你可以在 node_modules/highlight.js/styles/ 下挑选喜欢的颜色主题，例如 github.css, atom-one-dark.css 等
-import 'highlight.js/styles/atom-one-dark.css'
-import { smartWordExtension } from './smartWordExt'
-import { autoSpaceExtension } from './autoSpaceExt'
-import taskLists from 'markdown-it-task-lists'
 import { useCanvasStore } from '@/stores/canvasStore'
+import 'highlight.js/styles/atom-one-dark.css'
+import taskLists from 'markdown-it-task-lists'
+import { autoSpaceExtension } from './autoSpaceExt'
+import { smartWordExtension } from './smartWordExt'
 
 const projectStore = useProjectStore()
 
 //#region === 1. 阅读模式逻辑 (MarkdownIt) ===
+
 const md = new MarkdownIt(
     {
         html: true,
@@ -284,7 +285,7 @@ function initEditor() {
             markdownKeymapExtension,
             // 1. 注册智能分词按键映射 (优先级通常较高，因为它在后面添加)
             smartWordExtension,
-            autoSpaceExtension
+            autoSpaceExtension,
         ]
     })
 
@@ -556,13 +557,16 @@ function onMouseDown(e: MouseEvent) {
 }
 
 /* 列表 */
-.markdown-body :deep(ul),
-.markdown-body :deep(ol) {
-    padding-left: 1.2em;
+.markdown-body> :deep(ul),
+.markdown-body> :deep(ol) {
     margin-top: 0.5em;
     margin-bottom: 0.5em;
 }
 
+.markdown-body :deep(ul),
+.markdown-body :deep(ol) {
+    padding-left: 1.2em;
+}
 
 .markdown-body :deep(img) {
     display: block;
