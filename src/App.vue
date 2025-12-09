@@ -158,10 +158,10 @@ const { getIntersectingNodes, findNode, selectionKeyCode, d3Selection } = useVue
 const dragStartPos = ref({ x: 0, y: 0 })
 const lastDragPos = ref({ x: 0, y: 0 });
 const carriedNodes = ref<GraphNode[]>([]); // 缓存被拖拽的视图节点对象，避免每帧去 find
+const carriedDragStartPos = ref<Record<string, XYPosition>>({})
 function onNodeDragStart(e: NodeDragEvent) {
     const node = e.node;
     dragStartPos.value = { ...node.position }
-    lastDragPos.value = { ...node.position }
     // console.log(currentDraggingNode)
     const logicNode = canvasStore.model.nodes[node.id];
     if (logicNode && (logicNode.structure === 'root' || logicNode.structure === 'node')) {
@@ -176,6 +176,9 @@ function onNodeDragStart(e: NodeDragEvent) {
         // 这样在 onNodeDrag 高频触发时，不用每次都去遍历查找
         // e.viewNodes 或者 store.vueNodes 都可以，建议直接用 VueFlow 的内部实例
         carriedNodes.value = uiStore.getGraphNodes(descendantIds)
+        carriedNodes.value.forEach(node =>
+            carriedDragStartPos.value[node.id] = { x: node.position.x, y: node.position.y }
+        )
     }
 }
 
@@ -238,14 +241,14 @@ function onNodeDrag(e: NodeDragEvent) {
 
     if (carriedNodes.value.length > 0) {
         // 1. 计算增量 (Delta)
-        const dx = e.node.position.x - lastDragPos.value.x;
-        const dy = e.node.position.y - lastDragPos.value.y;
+        const dx = draggedNode.position.x - dragStartPos.value.x;
+        const dy = draggedNode.position.y - dragStartPos.value.y;
 
         // 2. 更新所有子孙节点位置
         // 直接修改 GraphNode 的 position，Vue Flow 会自动高效渲染
         carriedNodes.value.forEach(child => {
-            child.position.x += dx;
-            child.position.y += dy;
+            child.position.x = carriedDragStartPos.value[child.id].x + dx
+            child.position.y = carriedDragStartPos.value[child.id].y + dy
         });
 
         // 3. 更新 lastPos 为当前位置，为下一帧做准备
@@ -539,7 +542,7 @@ function onAppMouseDown(e: MouseEvent) {
             v-model:edges="canvasStore.vueEdges"
             :node-types="nodeTypes"
             :zoom-on-double-click="false"
-            :fit-view-on-init="false"
+            :fit-view-on-init="true"
             @connect="onConnect"
             :pan-on-drag="[1, 2]"
             multi-selection-key-code="Control"
@@ -548,8 +551,8 @@ function onAppMouseDown(e: MouseEvent) {
                 style: { strokeWidth: 2, color: edgeColor, 'font-size': 20 },
                 interactionWidth: 50,
             }"
-            :min-zoom="0.2"
-            :max-zoom="4"
+            :min-zoom="0.25"
+            :max-zoom="2"
             :selection-key-code="false"
             :selection-mode="SelectionMode.Partial"
             :edges-updatable="true"
