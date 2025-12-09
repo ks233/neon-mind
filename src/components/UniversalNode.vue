@@ -2,7 +2,7 @@
 import { useMindMapKeyboard } from '@/composables/useMindMapShortcuts'
 import { useCanvasStore } from '@/stores/canvasStore'
 import { GraphNode, Handle, Position, useNode, useVueFlow, type NodeProps } from '@vue-flow/core'
-import { NodeResizer } from '@vue-flow/node-resizer'
+import { NodeResizer, OnResize, OnResizeStart } from '@vue-flow/node-resizer'
 import '@vue-flow/node-resizer/dist/style.css'
 import { useResizeObserver } from '@vueuse/core'
 import { computed, ref, toRef } from 'vue'
@@ -101,7 +101,7 @@ function handleUpdate(type: 'content' | 'url' | 'ratio', val: any) {
     }
 }
 
-function onResize(evt: any) {
+function onResize(evt: OnResize) {
     const { width, height } = evt.params
 
     const snappedWidth = snapToGrid(width)
@@ -115,9 +115,9 @@ function onResize(evt: any) {
 }
 
 // 3. 手动调整大小结束
-function onResizeEnd(evt: any) {
+function onResizeEnd(evt: OnResizeStart) {
     // 这会将 fixedSize 置为 true，切换到固定模式
-    onResize(evt)
+    onResize(evt as OnResize)
     canvasStore.updateNodeSize(
         id,
         { width: node.dimensions.width, height: node.dimensions.height },
@@ -187,10 +187,9 @@ const nodeStyles = computed(() => {
             'drag-over-child': isTarget && intent === 'child',
             'drag-over-above': isTarget && intent === 'above',
             'drag-over-below': isTarget && intent === 'below',
-            'dragging': dragging,
+            'dragging': dragging || isCarried,
             'is-detaching': isDetaching,
-            'is-editing': isEditing,
-            'is-carried': isCarried
+            'is-editing': isEditing
         }"
         @dblclick="onDblClick"
         :style="nodeStyles"
@@ -203,6 +202,7 @@ const nodeStyles = computed(() => {
             :min-width="100"
             :min-height="40"
             :snap-grid="[20, 20]"
+            :keep-aspect-ratio="false"
             line-class-name="invisible-resizer-line"
             handle-class-name="invisible-resizer-handle"
             @resize="onResize"
@@ -234,6 +234,7 @@ const nodeStyles = computed(() => {
             <span>x:{{ Math.round(position.x) }}, y:{{ Math.round(position.y || 0) }}, </span>
             <span> w:{{ Math.round(dimensions.width) }}, h:{{ Math.round(dimensions.height || 0) }}, </span>
             <span>id: {{ id.substring(0, 8) }}</span><br>
+            <span>z: {{ node.zIndex }}</span>
             <template v-if="data.logicNode.contentType == 'image'">
                 <span> display: {{ (data.logicNode as ImagePayload).displaySrc }}</span><br>
                 <span> local: {{ (data.logicNode as ImagePayload).localSrc }}</span>
@@ -255,7 +256,7 @@ const nodeStyles = computed(() => {
     flex-direction: column;
     overflow: hidden;
     box-sizing: border-box;
-    transition: box-shadow 0.1s, border-color 0.1s;
+    transition: box-shadow 0.2s, border-color 0.1s, background-color 0.1s, opacity 0.2s;
 }
 
 /* === 模式 A: 自动大小 === */
@@ -276,14 +277,14 @@ const nodeStyles = computed(() => {
 }
 
 .universal-node.dragging {
-    opacity: 0.5;
-    z-index: -2;
+    opacity: 0.3;
 }
 
 .universal-node.is-detaching {
-    border-color: #18ffcd !important;
-    /* border-style: dashed !important; */
-    /* box-shadow: 0 0 10px #ff4d4f !important; */
+    /* border-color: #18ffcd !important; */
+    border-style: dashed !important;
+    box-shadow: 0 0 10px 0px var(--border-color) !important;
+    opacity: 1;
 }
 
 .content-wrapper {
@@ -330,10 +331,10 @@ const nodeStyles = computed(() => {
 .io-handle {
     width: 6px;
     height: 6px;
-    background: var(--handle-color);
+    background: var(--border-color);
     opacity: 0;
     transition: opacity 0.2s;
-    /* z-index: -1; */
+    z-index: -100;
 }
 
 /* [核心代码] 使用伪元素扩大判定范围 */
@@ -341,14 +342,13 @@ const nodeStyles = computed(() => {
     content: '';
     position: absolute;
 
-    /* 向四周各扩张 10px，这样点击范围就变成了 28x28px */
-    top: -10px;
-    bottom: -10px;
-    left: -10px;
-    right: -10px;
+    top: -8px;
+    bottom: -8px;
+    left: -8px;
+    right: -8px;
 
     /* 调试用：如果想看到热区，可以取消下面这行的注释 */
-    /* background: rgba(255, 255, 255, 0.1); */
+    background: rgba(255, 255, 255, 0.1);
 
     border-radius: 50%;
     /* 热区也设为圆形，手感更好 */
@@ -367,11 +367,6 @@ const nodeStyles = computed(() => {
     /* 激活色 */
 }
 
-/* 拖拽反馈样式 */
-.drag-over-child {
-    box-shadow: 0 0 0 10px #188fff44 !important;
-    background-color: rgba(24, 144, 255, 0.1);
-}
 
 .universal-node::after {
     content: '';
@@ -384,19 +379,35 @@ const nodeStyles = computed(() => {
     /* 鼠标穿透 */
     border: 0 solid transparent;
     /* 默认无边框 */
-    transition: border-color 0.1s;
+    transition: border-color 0.1s, box-shadow 0.1s;
     z-index: 100;
     border-radius: inherit;
     /* 跟随圆角 */
 }
 
+/* 拖拽反馈样式 */
+.drag-over-child {
+    box-shadow: inset -5px 0px var(--border-color);
+    /* background-color: color-mix(in srgb, var(--node-bg), transparent 20%); */
+}
+
 .drag-over-above::after {
-    border-top: 3px solid #ff4d4f !important;
+    /* border-top: 6px solid var(--border-color) !important; */
+    /* x y 羽化 扩展 */
+    box-shadow: inset 0px 6px 0px var(--border-color);
 }
 
 .drag-over-below::after {
-    border-bottom: 3px solid #ff4d4f !important;
+    /* border-bottom: 6px solid var(--border-color) !important; */
+    box-shadow: inset 0px -6px 0px var(--border-color);
 }
+
+.drag-over-above,
+.drag-over-below {
+    /* background-color: color-mix(in srgb, var(--node-bg), transparent 20%); */
+    /* box-shadow: 0 0 0 2px var(--border-color) !important; */
+}
+
 
 /* 强制隐藏线条 */
 :deep(.invisible-resizer-line) {
