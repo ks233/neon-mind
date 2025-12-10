@@ -69,6 +69,7 @@ export class ResourceManager {
                         }
 
                         const localSrc = await projectStore.tryGetRelativePath(targetPath);
+                        imgNode.localSrc = localSrc ?? undefined
                         if (localSrc === null) throw new Error("Failed to assign localSrc to new Image.");
                         // 5. 更新 Model
                         canvasStore.updateNode(imgNode.id, node => {

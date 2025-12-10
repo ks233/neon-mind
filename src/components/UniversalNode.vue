@@ -173,6 +173,8 @@ const nodeStyles = computed(() => {
     }
 })
 
+const isImage = computed(() => props.data.logicNode.contentType === 'image')
+
 </script>
 
 <template>
@@ -189,7 +191,8 @@ const nodeStyles = computed(() => {
             'drag-over-below': isTarget && intent === 'below',
             'dragging': dragging || isCarried,
             'is-detaching': isDetaching,
-            'is-editing': isEditing
+            'is-editing': isEditing,
+            'is-image': isImage
         }"
         @dblclick="onDblClick"
         :style="nodeStyles"
@@ -213,7 +216,10 @@ const nodeStyles = computed(() => {
         <Handle id="right" type="source" :position="Position.Right" class="io-handle" />
         <Handle id="bottom" type="source" :position="Position.Bottom" class="io-handle" />
 
-        <div class="content-wrapper">
+        <div class="content-wrapper"
+            :class="{
+                'is-image': isImage
+            }">
             <component
                 :is="ContentComponent"
                 :data="(data.logicNode as any)"
@@ -267,6 +273,16 @@ const nodeStyles = computed(() => {
     min-height: 40px;
     max-width: var(--converted-max-width);
     /* 限制最大宽度，超过自动换行 */
+}
+
+.content-wrapper.is-image {
+    padding: 0;
+    border-radius: 0;
+}
+
+.universal-node.is-image {
+    padding: 0;
+    border-radius: 0;
 }
 
 /* === 模式 B: 固定大小 === */
@@ -386,7 +402,7 @@ const nodeStyles = computed(() => {
 }
 
 /* 拖拽反馈样式 */
-.drag-over-child {
+.drag-over-child::after {
     box-shadow: inset -5px 0px var(--border-color);
     /* background-color: color-mix(in srgb, var(--node-bg), transparent 20%); */
 }

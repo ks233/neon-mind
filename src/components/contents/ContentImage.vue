@@ -58,7 +58,7 @@ function onImageLoad() {
     display: flex;
     align-items: center;
     justify-content: center;
-    border-radius: 4px;
+    /* border-radius: 4px; */
     /*稍微一点圆角*/
 }
 

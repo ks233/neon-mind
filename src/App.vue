@@ -553,7 +553,7 @@ function onAppMouseDown(e: MouseEvent) {
             }"
             :min-zoom="0.25"
             :max-zoom="2"
-            :selection-key-code="false"
+            :selection-key-code="true"
             :selection-mode="SelectionMode.Partial"
             :edges-updatable="true"
             @edge-update-start="onEdgeUpdateStart"

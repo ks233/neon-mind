@@ -4,6 +4,7 @@ import { useUiStore } from '@/stores/uiStore';
 import { useCanvasStore } from '@/stores/canvasStore';
 import { isInputActive } from '@/utils/keyboard'; // 假设你有这个工具函数
 import { VisualSnapshot } from '@/types/model';
+import { snapToGridXY } from '@/utils/grid';
 
 export function useClipboard() {
     const canvasStore = useCanvasStore();
@@ -59,6 +60,6 @@ export function useClipboard() {
             y: y.value
         });
         // 调用 Store 的智能粘贴
-        await canvasStore.pasteFromClipboard(mousePos);
+        await canvasStore.pasteFromClipboard(snapToGridXY(mousePos));
     });
 }

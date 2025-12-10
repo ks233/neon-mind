@@ -12,6 +12,7 @@ import { useDebounceFn } from '@vueuse/core';
 
 import { applyPatches, enableMapSet, enablePatches, produce, type Patch } from 'immer';
 import { ClipboardService } from '@/services/clipboardService';
+import { useProjectStore } from './projectStore';
 
 // 开启 Set/Map 支持 (你的 model 用到了 Set)
 enableMapSet();
@@ -1007,7 +1008,7 @@ export const useCanvasStore = defineStore('canvas', () => {
     async function pasteFromClipboard(mousePos?: { x: number, y: number }) {
         // 1. 读取剪贴板内容
         const result = await ClipboardService.readClipboard();
-
+        const currentPos = mousePos || { x: 0, y: 0 };
         // 2. 根据类型分发
         if (result.type === 'nodes') {
             const nodes = result.data as LogicNode[];
@@ -1017,16 +1018,16 @@ export const useCanvasStore = defineStore('canvas', () => {
             }
         }
         else if (result.type === 'image') {
-            // 处理图片粘贴 (result.data 是 Tauri Image)
-            // 你需要将 Image 转为 ObjectURL 或保存到本地
-            // 这里假设 addContentNode 支持 Blob 或 base64
-            // const blob = new Blob([result.data.rgba()], ...) // 比较复杂
-            // 简单做法：直接用 addContentNode 占位，实际图片处理需要 ImageService
-            console.log("Paste Image detected (Implementation needed in ImageService)");
-            // 建议：转成 Base64 或 Blob Url
-            const currentPos = mousePos || { x: 0, y: 0 };
-            // 假设 addContentNode 支持 base64
-            // addContentNode('image', ...);
+            // [!code focus:10] 核心修改：处理图片
+            const base64Data = result.data as string;
+
+            // 1. 尝试保存到本地 (如果是已保存的工程)
+            // const finalSrc = await saveImageToAssets(base64Data);
+
+            // 2. 创建节点
+            // 如果 finalSrc 是相对路径 (./assets/..)，ImageContent 组件会通过 convertFileSrc 处理它
+            // 如果 finalSrc 是 base64，ImageContent 组件也能直接显示
+            addImage(currentPos, base64Data, null);
         }
         else if (result.type === 'link') {
             const currentPos = mousePos || { x: 0, y: 0 };

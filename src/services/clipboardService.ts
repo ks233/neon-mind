@@ -1,6 +1,7 @@
 // src/services/clipboardService.ts
 import { writeText, readText, readImage } from '@tauri-apps/plugin-clipboard-manager';
 import { writeFile, readTextFile, BaseDirectory } from '@tauri-apps/plugin-fs';
+import { Image } from '@tauri-apps/api/image';
 
 const CLIPBOARD_FILE = 'clipboard_nodes.json';
 const REF_PREFIX = 'MINDMAP_CLIP_REF::';
@@ -29,6 +30,30 @@ export const ClipboardService = {
         }
     },
 
+    async tauriImageToDataUrl(tauriImage: Image): Promise<string> {
+        const rgba = await tauriImage.rgba();
+        const size = await tauriImage.size();
+
+        // 1. 创建离屏 Canvas
+        const canvas = document.createElement('canvas');
+        canvas.width = size.width;
+        canvas.height = size.height;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) throw new Error('Failed to create canvas context');
+
+        // 2. 将 RGBA 数据填充到 ImageData
+        // Tauri 返回的是 Uint8Array，需要转为 Uint8ClampedArray 供 Canvas 使用
+        const imageData = new ImageData(
+            new Uint8ClampedArray(rgba),
+            size.width,
+            size.height
+        );
+
+        // 3. 绘制并转换
+        ctx.putImageData(imageData, 0, 0);
+        return canvas.toDataURL('image/png');
+    },
+
     async readClipboard(): Promise<ClipboardResult> {
         try {
             // 1. 先读文本，检查引用标记
@@ -53,7 +78,8 @@ export const ClipboardService = {
             try {
                 const image = await readImage();
                 if (image) {
-                    return { type: 'image', data: image };
+                    const base64Url = await this.tauriImageToDataUrl(image);
+                    return { type: 'image', data: base64Url };
                 }
             } catch (e) { }
 
