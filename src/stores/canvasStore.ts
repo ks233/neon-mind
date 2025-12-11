@@ -4,15 +4,15 @@ import { defineStore } from 'pinia';
 import { ref, shallowRef } from 'vue';
 import type { CanvasModel, ImagePayload, LinkPayload, LogicNode, MarkdownPayload, VisualSnapshot } from '../types/model';
 
-import { calculateMaxRectsPack, computeMindMapLayout, NodeGeometry } from '@/services/layoutService';
+import { calculateCompactLayout, calculateMaxRectsPack, computeMindMapLayout, NodeGeometry } from '@/services/layoutService';
 
 import { NODE_CONSTANTS } from '@/config/layoutConfig';
 import { fetchLinkMetadata } from '@/services/linkService';
 import { useDebounceFn } from '@vueuse/core';
 
-import { applyPatches, enableMapSet, enablePatches, produce, type Patch } from 'immer';
 import { ClipboardService } from '@/services/clipboardService';
-import { useProjectStore } from './projectStore';
+import { applyPatches, enableMapSet, enablePatches, produce, type Patch } from 'immer';
+import { invoke } from '@tauri-apps/api/core';
 
 // 开启 Set/Map 支持 (你的 model 用到了 Set)
 enableMapSet();
@@ -199,8 +199,7 @@ export const useCanvasStore = defineStore('canvas', () => {
 
     async function addImage(
         position: { x: number, y: number },
-        displaySrc: string,
-        localSrc: string | null,
+        runtimePath: string,
         parentId?: string
     ) {
         const id = crypto.randomUUID();
@@ -218,14 +217,10 @@ export const useCanvasStore = defineStore('canvas', () => {
             contentType: 'image',
             // height 会由 Layout 根据 ratio 算出来
             ratio: 1, // 初始比例，组件加载完会更新
-            width: 200, // 默认宽
-            localSrc: undefined, // 标记为"未持久化"
-            displaySrc: displaySrc, // 立即显示
+            width: 400, // 默认宽
+            relativePath: undefined, // 标记为"未持久化"
+            runtimePath: runtimePath, // 立即显示
         } as ImagePayload;
-
-        if (localSrc !== null) {
-            payload.localSrc = localSrc
-        }
 
         await execute(draft => {
             if (payload) {
@@ -923,6 +918,35 @@ export const useCanvasStore = defineStore('canvas', () => {
             });
         });
     }
+
+    // [修改] 紧凑排列 Action
+    function compactNodes(
+        targetIds: string[],
+        geometryMap: Map<string, NodeGeometry>,
+        direction: 'left' | 'right' | 'top' | 'bottom'
+    ) {
+        execute((draft) => {
+            // 1. 过滤：只处理根节点或游离节点
+            const validRootIds = targetIds.filter(id => {
+                const node = draft.nodes[id];
+                return node && !node.parentId;
+            });
+
+            if (validRootIds.length < 2) return;
+
+            // 2. 计算紧凑布局
+            const updates = calculateCompactLayout(validRootIds, geometryMap, direction);
+
+            // 3. 应用更新
+            Object.entries(updates).forEach(([id, pos]) => {
+                const node = draft.nodes[id];
+                if (node) {
+                    node.x = pos.x;
+                    node.y = pos.y;
+                }
+            });
+        });
+    }
     //#endregion
 
     //#region 复制粘贴
@@ -1018,16 +1042,20 @@ export const useCanvasStore = defineStore('canvas', () => {
             }
         }
         else if (result.type === 'image') {
-            // [!code focus:10] 核心修改：处理图片
-            const base64Data = result.data as string;
+            const base64 = result.data as string;
 
-            // 1. 尝试保存到本地 (如果是已保存的工程)
-            // const finalSrc = await saveImageToAssets(base64Data);
+            try {
+                // [核心] 调用 Rust，将 Base64 落地为 _temp/hash.png
+                // 返回值如: "_temp/a1b2c3d4.png"
+                const runtimePath = await invoke<string>('save_temp_image', {
+                    base64Data: base64
+                });
+                // 添加节点，此时 store 里只存这一个短路径字符串
+                addImage(currentPos, runtimePath);
 
-            // 2. 创建节点
-            // 如果 finalSrc 是相对路径 (./assets/..)，ImageContent 组件会通过 convertFileSrc 处理它
-            // 如果 finalSrc 是 base64，ImageContent 组件也能直接显示
-            addImage(currentPos, base64Data, null);
+            } catch (e) {
+                console.error("Failed to save temp image", e);
+            }
         }
         else if (result.type === 'link') {
             const currentPos = mousePos || { x: 0, y: 0 };
@@ -1168,6 +1196,7 @@ export const useCanvasStore = defineStore('canvas', () => {
         isRoot,
         // 排版
         packNodes,
+        compactNodes,
         // 复制粘贴
         pasteNodes,
         copySelection,

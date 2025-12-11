@@ -1,9 +1,10 @@
 import { PersistenceManager } from '@/services/persistence/PersistenceManager';
-import { dirname, normalize } from '@tauri-apps/api/path';
+import { dirname, isAbsolute, join, normalize } from '@tauri-apps/api/path';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { defineStore } from 'pinia';
 import { computed, ref, watch } from 'vue';
 import { useCanvasStore } from './canvasStore';
+import { convertFileSrc } from '@tauri-apps/api/core';
 
 
 export const useProjectStore = defineStore('project', () => {
@@ -141,6 +142,15 @@ export const useProjectStore = defineStore('project', () => {
         }
         return null
     }
+
+    async function convertThumbSrc(localSrc: string, width: number) {
+        let absolutePath = localSrc;
+
+        if (!await isAbsolute(localSrc)) {
+            absolutePath = await join(projectDir.value ?? '', localSrc);
+        }
+        return convertFileSrc(absolutePath, "thumb") + `?w=${width}`;
+    }
     return {
         projectFilePath,
         projectDir,
@@ -152,6 +162,7 @@ export const useProjectStore = defineStore('project', () => {
         open,
         setDirty,
         setProjectFilePath,
-        tryGetRelativePath
+        tryGetRelativePath,
+        convertThumbSrc
     };
 });

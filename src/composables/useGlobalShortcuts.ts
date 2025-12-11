@@ -225,6 +225,39 @@ export function useGlobalShortcuts() {
             canvasStore.packNodes(selectedIds, geometryMap);
         }
     });
+
+
+    onKeyStroke(['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'], (e) => {
+        if (!(e.ctrlKey || e.metaKey)) return;
+        if (isInputActive()) return;
+
+        e.preventDefault();
+        e.stopPropagation();
+
+        const canvasStore = useCanvasStore();
+        const uiStore = useUiStore();
+
+        const selectedIds = uiStore.getSelectedNodeIds();
+        if (selectedIds.length < 2) return;
+        const geometryMap = uiStore.getGeometryMap(canvasStore.model.nodes);
+
+        // [修改] 调用 compactNodes
+        switch (e.key) {
+            case 'ArrowLeft':
+                canvasStore.compactNodes(selectedIds, geometryMap, 'left');
+                break;
+            case 'ArrowRight':
+                canvasStore.compactNodes(selectedIds, geometryMap, 'right');
+                break;
+            case 'ArrowUp':
+                canvasStore.compactNodes(selectedIds, geometryMap, 'top');
+                break;
+            case 'ArrowDown':
+                canvasStore.compactNodes(selectedIds, geometryMap, 'bottom');
+                break;
+        }
+    });
+
     // debug 用
     onKeyStroke(['d', 'D'], (e) => {
         console.log('ctrl', e.ctrlKey)

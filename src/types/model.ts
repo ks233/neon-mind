@@ -42,8 +42,8 @@ export interface MarkdownPayload extends BaseNode {
 
 export interface ImagePayload extends BaseNode {
     contentType: 'image';
-    localSrc?: string
-    displaySrc?: string
+    relativePath?: string
+    runtimePath?: string
     ratio: number; // 宽高比
     fit?: 'cover' | 'contain';
 }

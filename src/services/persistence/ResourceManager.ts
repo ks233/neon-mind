@@ -1,5 +1,5 @@
 import { copyFile, writeFile, mkdir, exists } from '@tauri-apps/plugin-fs';
-import { convertFileSrc } from '@tauri-apps/api/core';
+import { convertFileSrc, invoke } from '@tauri-apps/api/core';
 import { join, extname } from '@tauri-apps/api/path';
 import type { CanvasModel, LogicNode, ImagePayload } from '@/types/model';
 import { toRaw } from 'vue';
@@ -14,7 +14,8 @@ export class ResourceManager {
      */
     static async localizeAssets(model: CanvasModel, targetDir: string): Promise<CanvasModel> {
         // 1. 深拷贝 (这是我们要修改并保存到硬盘的版本)
-        const saveModel = structuredClone(toRaw(model)); const assetsDir = await join(targetDir, 'assets');
+        const saveModel = structuredClone(toRaw(model));
+        const assetsDir = await join(targetDir, 'assets');
 
         try {
             if (!(await exists(assetsDir))) {
@@ -24,65 +25,45 @@ export class ResourceManager {
 
         const nodes = Object.values(saveModel.nodes) as LogicNode[];
 
+        console.trace()
         const canvasStore = useCanvasStore()
-        const projectStore = useProjectStore()
-        for (const node of nodes) {
-            if (node.contentType === 'image') {
-                const imgNode = node as ImagePayload;
+        const imageNodes = Object.values(nodes).filter(n => n.contentType === 'image');
+        const pathsToCommit = imageNodes.filter(n => n.relativePath === undefined).map(n => n.runtimePath) as string[];
+        const uniquePaths = [...new Set(pathsToCommit)];
 
-                // [核心逻辑]
-                // 只要没有 localSrc，就说明需要保存 (不管它是 blob 还是 asset 还是 http)
-                if (!imgNode.localSrc && imgNode.displaySrc) {
-                    try {
-                        // 1. 统一使用 fetch 获取数据流
-                        // 无论是 blob:, asset://, 还是 https://，fetch 都能搞定
-                        const response = await fetch(imgNode.displaySrc);
-                        if (!response.ok) throw new Error(`Fetch failed: ${response.statusText}`);
+        console.log(pathsToCommit)
+        if (uniquePaths.length > 0) {
+            try {
+                // [核心] 告诉 Rust 把这些临时文件移动到项目 assets 目录下
+                // 这一步是原子性的文件移动
+                const newPaths = await invoke<string[]>('commit_assets', {
+                    projectRoot: targetDir,
+                    runtimePaths: pathsToCommit
+                });
+                console.log(newPaths)
 
-                        const blob = await response.blob();
-                        const arrayBuffer = await blob.arrayBuffer();
-                        const fileData = new Uint8Array(arrayBuffer);
+                // 创建映射表
+                const pathMap = new Map<string, string>();
+                uniquePaths.forEach((oldPath, index) => {
+                    pathMap.set(oldPath, newPaths[index]);
+                });
 
-                        // 2. 智能推断扩展名
-                        // 优先从 URL 拿，拿不到从 MIME type 拿
-                        let ext = 'png'; // 兜底
-
-                        // 尝试从 displaySrc 提取后缀 (例如 xxx.jpg)
-                        // 简单的正则提取，处理 asset:// 路径
-                        const urlMatch = imgNode.displaySrc.match(/\.([a-zA-Z0-9]+)($|\?)/);
-                        if (urlMatch) {
-                            ext = urlMatch[1];
-                        } else {
-                            // 从 Blob 的 type 推断 (例如 image/jpeg)
-                            const mimeExt = blob.type.split('/')[1];
-                            if (mimeExt) ext = mimeExt;
-                        }
-
-                        // 3. 保存路径
-                        const hash = crypto.randomUUID();
-                        const filename = `${hash}.${ext}`;
-                        const targetPath = await join(assetsDir, filename);
-
-                        // 4. 写入硬盘
-                        if (!(await exists(targetPath))) {
-                            await writeFile(targetPath, fileData);
-                        }
-
-                        const localSrc = await projectStore.tryGetRelativePath(targetPath);
-                        imgNode.localSrc = localSrc ?? undefined
-                        if (localSrc === null) throw new Error("Failed to assign localSrc to new Image.");
-                        // 5. 更新 Model
-                        canvasStore.updateNode(imgNode.id, node => {
-                            (node as ImagePayload).localSrc = localSrc;
+                // [关键] 更新前端 Store 中的路径
+                imageNodes.forEach(n => {
+                    if (n.relativePath !== undefined) return;
+                    const oldPath = n.runtimePath;
+                    if (oldPath && pathMap.has(oldPath)) {
+                        const newPath = pathMap.get(oldPath)
+                        console.log("!!!", newPath)
+                        n.relativePath = newPath
+                        canvasStore.updateNode(n.id, node => {
+                            (node as ImagePayload).relativePath = newPath;
                         }, false)
-                    } catch (e) {
-                        console.error(`Failed to save image: ${imgNode.displaySrc}`, e);
-                        // 即使失败，也保留 displaySrc 以便下次尝试，或者让用户看到坏图
                     }
-                }
-
-                // 清理运行时字段
-                delete imgNode.displaySrc;
+                    delete n.runtimePath
+                });
+            } catch (e) {
+                console.error("Failed to commit assets", e);
             }
         }
         return saveModel;
@@ -98,12 +79,12 @@ export class ResourceManager {
             if (node.contentType === 'image') {
                 const imgNode = node as ImagePayload;
 
-                if (imgNode.localSrc) {
+                if (imgNode.relativePath) {
                     // 拼接完整路径: D:/Project/assets/abc.png
-                    const fullPath = await join(projectRoot, imgNode.localSrc);
+                    const fullPath = await join(projectRoot, imgNode.relativePath);
 
-                    // 转换为 WebView 可读路径
-                    imgNode.displaySrc = convertFileSrc(fullPath);
+                    // 转换为 runtimePath
+                    imgNode.runtimePath = fullPath;
                 }
             }
         }

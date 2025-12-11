@@ -27,7 +27,6 @@ export class PersistenceManager {
 
     // 保存流程
     static async saveProjectAs(model: CanvasModel) {
-        console.trace()
         try {
             // 1. 让用户选择一个【文件夹】作为工程目录
             // 注意：Tauri dialog.open({ directory: true }) 让用户选目录

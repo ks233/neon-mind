@@ -1,6 +1,11 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import type { ImagePayload } from '@/types/model'
+import { useVueFlow } from '@vue-flow/core';
+import { isNodeInViewport } from '@/utils/viewportUtils';
+import { useUiStore } from '@/stores/uiStore';
+import { useProjectStore } from '@/stores/projectStore';
+import { getResourceUrl } from '@/utils/imageUtils';
 
 // 1. 接收具体类型的 Payload
 const props = defineProps<{
@@ -28,25 +33,80 @@ function onImageLoad() {
         }
     }
 }
+
+// 定义 LOD 等级
+const { viewport, dimensions, findNode } = useVueFlow();
+const LEVEL_SMALL = 500;
+const LEVEL_MEDIUM = 1500;
+
+const uiStore = useUiStore()
+const projectStore = useProjectStore()
+
+
+const isVisible = ref(false);
+const screenPixelWidth = ref(0)
+watch(
+    () => viewport.value,
+    async () => {
+        const graphNode = findNode(props.data.id);
+        // 如果节点还没初始化好尺寸，先不处理
+        if (!graphNode || !graphNode.dimensions || graphNode.dimensions.width === 0) return;
+
+        // 2. 视口剔除 (如果看不见，什么都不加载，或者保留上一帧)
+        const inViewport = isNodeInViewport(
+            graphNode.computedPosition,
+            graphNode.dimensions,
+            viewport.value,
+            dimensions.value,
+            200 // 缓冲区稍微大一点，保证 Medium 加载平滑
+        );
+        isVisible.value = inViewport;
+        if (!inViewport) {
+            // 可选：滑出视口后是否销毁？
+            // 为了显存考虑，可以只保留 small 级别的 URL，或者置空
+            // 这里为了体验，我们不主动销毁，交给浏览器管理
+            return;
+        }
+
+        // 3. [核心] 计算节点在屏幕上的实际像素宽度
+        const nodeWidth = graphNode.dimensions.width;
+        const currentZoom = viewport.value.zoom;
+        screenPixelWidth.value = nodeWidth * currentZoom;
+    },
+    { deep: true, immediate: true }
+);
+
+const currentSrc = computed(() => {
+    // 假设这一步算出了需要 500px 的图
+    let lodWidth = 500; // 或者根据 Zoom 动态计算
+    if (screenPixelWidth.value < LEVEL_SMALL) {
+        lodWidth = LEVEL_SMALL
+    } else if (screenPixelWidth.value < LEVEL_MEDIUM) {
+        lodWidth = LEVEL_MEDIUM
+    }
+    // props.data.localSrc 可能是 "_temp/abc.png" 或 "assets/abc.png"
+    return getResourceUrl(props.data.runtimePath ?? '', lodWidth);
+});
+
+const bgLayerSrc = computed(() => getResourceUrl(props.data.relativePath ?? props.data.relativePath ?? '', LEVEL_SMALL))
+
 </script>
 
 <template>
-    <div class="image-content">
+    <div class="image-content image-wrapper">
         <img
-            ref="imgRef"
-            :src="data.displaySrc"
-            :style="{
-                objectFit: data.fit || 'cover',
-                // 如果是固定大小，图片填满容器；如果是自动大小，由容器限制
-                width: '100%',
-                height: '100%'
-            }"
-            draggable="false"
+            v-if="data.relativePath"
+            :src="bgLayerSrc"
+            class="bg-layer"
             @load="onImageLoad" />
-
-        <div v-if="!data.displaySrc" class="image-placeholder">
+        <img
+            :src="currentSrc"
+            class="main-layer nodrag"
+            decoding="async" />
+        <div v-if="!data.runtimePath" class="image-placeholder">
             No Image
         </div>
+        <div class="debug"> {{ currentSrc }} </div>
     </div>
 </template>
 
@@ -66,5 +126,43 @@ img {
     display: block;
     pointer-events: none;
     /* 让鼠标事件穿透给父级，方便拖拽节点 */
+}
+
+.image-wrapper {
+    /* position: relative; */
+}
+
+.bg-layer {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    z-index: 1;
+    /* opacity: 0.5; */
+    /* filter: blur(2px); */
+    /* 稍微模糊作为背景 */
+}
+
+.main-layer {
+    /* top: 0; */
+    /* left: 0; */
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    z-index: 2;
+}
+
+.debug {
+    position: absolute;
+    background-color: black;
+
+    word-wrap: break-word;
+
+    top: 0;
+    left: 0;
+    width: 100%;
+    z-index: 3;
 }
 </style>

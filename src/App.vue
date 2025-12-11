@@ -552,7 +552,7 @@ function onAppMouseDown(e: MouseEvent) {
                 interactionWidth: 50,
             }"
             :min-zoom="0.25"
-            :max-zoom="2"
+            :max-zoom="3"
             :selection-key-code="true"
             :selection-mode="SelectionMode.Partial"
             :edges-updatable="true"

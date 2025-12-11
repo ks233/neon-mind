@@ -2,7 +2,7 @@ import { LAYOUT_CONSTANTS, NODE_CONSTANTS } from '@/config/layoutConfig';
 import { useCanvasStore } from '@/stores/canvasStore';
 import { useUiStore } from '@/stores/uiStore';
 import type { LogicNode } from '@/types/model';
-import { ceilToGrid } from '@/utils/grid';
+import { ceilToGrid, snapToGrid } from '@/utils/grid';
 import { createVisualNode } from '@/utils/transformers';
 import type { Edge, Node } from '@vue-flow/core';
 import potpack from 'potpack';
@@ -425,7 +425,7 @@ export function calculateMaxRectsPack(
     // 2. 配置 Packer
     // 4096, 4096 是画布预设最大宽高，会自动扩展
     // padding: 间距
-    const packer = new MaxRectsPacker(4096, 4096, GAP, {
+    const packer = new MaxRectsPacker(65536, 65536, GAP, {
         smart: true,      // 尝试多种策略寻找最优解
         pot: false,       // 不需要 Power of Two (那是给游戏贴图用的)
         border: GAP       // 画布边缘留白
@@ -468,3 +468,146 @@ export function calculateMaxRectsPack(
     return updates;
 }
 
+
+function isRangeIntersect(min1: number, max1: number, min2: number, max2: number) {
+    // 允许一点点容差，防止浮点数精度问题
+    return max1 > min2 + 0.1 && min1 < max2 - 0.1;
+}
+
+/**
+ * 计算紧凑布局 (Gravity Compaction)
+ * 类似于 PureRef 的 Ctrl+Arrows：产生一个方向的力，压实空隙，但不改变副轴坐标
+ */
+export function calculateCompactLayout(
+    targetIds: string[],
+    geometryMap: Map<string, NodeGeometry>,
+    direction: 'left' | 'right' | 'top' | 'bottom'
+) {
+    const GAP = 20; // 间距
+    const updates: Record<string, { x: number, y: number }> = {};
+
+    // 1. 获取包围盒
+    const boxes = targetIds.map(id => {
+        const bounds = getTreeBounds(id, geometryMap);
+        if (!bounds) return null;
+        return {
+            id,
+            x: bounds.x,
+            y: bounds.y,
+            w: bounds.width,
+            h: bounds.height,
+            memberIds: bounds.memberIds,
+            originalX: bounds.x,
+            originalY: bounds.y
+        };
+    }).filter(Boolean) as any[];
+
+    if (boxes.length < 2) return updates;
+
+    // 2. 预处理：确定边界墙 (Wall)
+    const minX = Math.min(...boxes.map(b => b.x));
+    const maxX = Math.max(...boxes.map(b => b.x + b.w));
+    const minY = Math.min(...boxes.map(b => b.y));
+    const maxY = Math.max(...boxes.map(b => b.y + b.h));
+
+    // 3. 排序 (处理顺序很重要)
+    if (direction === 'left') {
+        boxes.sort((a, b) => a.x - b.x); // 从左到右处理
+    } else if (direction === 'right') {
+        boxes.sort((a, b) => (b.x + b.w) - (a.x + a.w)); // 从右到左处理
+    } else if (direction === 'top') {
+        boxes.sort((a, b) => a.y - b.y); // 从上到下处理
+    } else if (direction === 'bottom') {
+        boxes.sort((a, b) => (b.y + b.h) - (a.y + a.h)); // 从下到上处理
+    }
+
+    // 4. 核心算法：带碰撞检测的堆叠
+    // processed 数组存放已经安置好的盒子，用来做碰撞检测
+    const processed: typeof boxes = [];
+
+    boxes.forEach(current => {
+        let targetX = current.x;
+        let targetY = current.y;
+
+        if (direction === 'left') {
+            // === 向左压 ===
+            // 默认目标：最左边的墙
+            let limitX = minX;
+
+            // 检查谁挡路了
+            processed.forEach(blocker => {
+                // 如果 Y 轴有交集 (说明在同一行/高度重叠)
+                if (isRangeIntersect(current.y, current.y + current.h, blocker.y, blocker.y + blocker.h)) {
+                    // 必须排在 blocker 的右边
+                    limitX = Math.max(limitX, blocker.x + blocker.w + GAP);
+                }
+            });
+            targetX = limitX;
+
+        } else if (direction === 'right') {
+            // === 向右压 ===
+            // 默认目标：最右边的墙 - 自己的宽度
+            let limitX = maxX - current.w;
+
+            processed.forEach(blocker => {
+                // 如果 Y 轴有交集
+                if (isRangeIntersect(current.y, current.y + current.h, blocker.y, blocker.y + blocker.h)) {
+                    // 必须排在 blocker 的左边
+                    limitX = Math.min(limitX, blocker.x - GAP - current.w);
+                }
+            });
+            targetX = limitX;
+
+        } else if (direction === 'top') {
+            // === 向上压 ===
+            // 默认目标：最上边的墙
+            let limitY = minY;
+
+            processed.forEach(blocker => {
+                // 如果 X 轴有交集 (说明在同一列/宽度重叠)
+                if (isRangeIntersect(current.x, current.x + current.w, blocker.x, blocker.x + blocker.w)) {
+                    // 必须排在 blocker 的下边
+                    limitY = Math.max(limitY, blocker.y + blocker.h + GAP);
+                }
+            });
+            targetY = limitY;
+
+        } else if (direction === 'bottom') {
+            // === 向下压 ===
+            // 默认目标：最下边的墙 - 自己的高度
+            let limitY = maxY - current.h;
+
+            processed.forEach(blocker => {
+                // 如果 X 轴有交集
+                if (isRangeIntersect(current.x, current.x + current.w, blocker.x, blocker.x + blocker.w)) {
+                    // 必须排在 blocker 的上边
+                    limitY = Math.min(limitY, blocker.y - GAP - current.h);
+                }
+            });
+            targetY = limitY;
+        }
+
+        // 更新当前盒子位置，加入已处理列表
+        current.x = targetX;
+        current.y = targetY;
+        processed.push(current);
+
+        // 计算 Delta 并应用到整棵树
+        const dx = targetX - current.originalX;
+        const dy = targetY - current.originalY;
+
+        if (Math.abs(dx) > 0.1 || Math.abs(dy) > 0.1) {
+            current.memberIds.forEach((memberId: string) => {
+                const member = geometryMap.get(memberId);
+                if (member) {
+                    updates[memberId] = {
+                        x: member.x + dx,
+                        y: member.y + dy
+                    };
+                }
+            });
+        }
+    });
+
+    return updates;
+}

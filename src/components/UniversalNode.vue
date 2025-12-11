@@ -102,6 +102,7 @@ function handleUpdate(type: 'content' | 'url' | 'ratio', val: any) {
 }
 
 function onResize(evt: OnResize) {
+    if (isImage.value) return;
     const { width, height } = evt.params
 
     const snappedWidth = snapToGrid(width)
@@ -205,7 +206,7 @@ const isImage = computed(() => props.data.logicNode.contentType === 'image')
             :min-width="100"
             :min-height="40"
             :snap-grid="[20, 20]"
-            :keep-aspect-ratio="false"
+            :keep-aspect-ratio="isImage"
             line-class-name="invisible-resizer-line"
             handle-class-name="invisible-resizer-handle"
             @resize="onResize"
@@ -240,10 +241,10 @@ const isImage = computed(() => props.data.logicNode.contentType === 'image')
             <span>x:{{ Math.round(position.x) }}, y:{{ Math.round(position.y || 0) }}, </span>
             <span> w:{{ Math.round(dimensions.width) }}, h:{{ Math.round(dimensions.height || 0) }}, </span>
             <span>id: {{ id.substring(0, 8) }}</span><br>
-            <span>z: {{ node.zIndex }}</span>
+            <!-- <span>z: {{ node.zIndex }}</span> -->
             <template v-if="data.logicNode.contentType == 'image'">
-                <span> display: {{ (data.logicNode as ImagePayload).displaySrc }}</span><br>
-                <span> local: {{ (data.logicNode as ImagePayload).localSrc }}</span>
+                <span> runtimePath: {{ (data.logicNode as ImagePayload).runtimePath }}</span><br>
+                <span> relativePath: {{ (data.logicNode as ImagePayload).relativePath }}</span>
             </template>
             <!-- {{ data.logicNode.width }} -->
         </div>
@@ -283,6 +284,7 @@ const isImage = computed(() => props.data.logicNode.contentType === 'image')
 .universal-node.is-image {
     padding: 0;
     border-radius: 0;
+    max-width: none;
 }
 
 /* === 模式 B: 固定大小 === */
@@ -309,6 +311,7 @@ const isImage = computed(() => props.data.logicNode.contentType === 'image')
     display: grid;
     min-height: 24px;
     padding: 6px 8px;
+    padding-bottom: 2px;
     overflow: hidden;
 }
 

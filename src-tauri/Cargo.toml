@@ -27,3 +27,12 @@ tauri-plugin-dialog = "2"
 tauri-plugin-fs = "2"
 tauri-plugin-clipboard-manager = "2"
 
+image = "0.24"             # 或最新版
+urlencoding = "2"
+sha2 = "0.10"
+hex = "0.4"
+percent-encoding = "2.3.2"
+mime_guess = "2.0.5"
+threadpool = "1.8"
+num_cpus = "1.0"           # 用于自动检测 CPU 核心数
+base64 = "0.21"

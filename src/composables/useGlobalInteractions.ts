@@ -2,6 +2,8 @@ import { useCanvasStore } from '@/stores/canvasStore';
 import { useProjectStore } from '@/stores/projectStore';
 import { convertFileSrc } from '@tauri-apps/api/core';
 import { getCurrentWebview } from '@tauri-apps/api/webview';
+import { useVueFlow } from '@vue-flow/core';
+import { useMouse } from '@vueuse/core';
 import { onMounted, onUnmounted } from 'vue';
 
 export function useGlobalInteractions() {
@@ -19,12 +21,14 @@ export function useGlobalInteractions() {
             console.log('Tauri File Drop Detected:', paths);
             // 计算中心点 (因为系统拖放事件不包含鼠标坐标)
             // 如果你想获取鼠标位置，需要配合 js 的 dragover 记录位置
-            const centerPos = { x: 0, y: 0 };
+            const { x, y } = useMouse()
+            const { screenToFlowCoordinate } = useVueFlow()
+            const centerPos = screenToFlowCoordinate({ x: x.value, y: y.value });
 
             paths.forEach(async (path) => {
                 // 调用 Store 添加路径类型的图片节点
                 // 注意：你需要确保 addContentNode 支持处理绝对路径字符串
-                canvasStore.addImage(centerPos, convertFileSrc(path), await projectStore.tryGetRelativePath(path));
+                canvasStore.addImage(centerPos, path);
             });
         });
     });
