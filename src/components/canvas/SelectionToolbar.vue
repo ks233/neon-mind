@@ -149,7 +149,7 @@ function setScale(scale: number) {
 
     /* 毛玻璃效果 */
     backdrop-filter: blur(8px);
-    background-color: rgba(0, 0, 0, 0.2);
+    background-color: rgba(0, 0, 0, 0.7);
 }
 
 :global(.dark) .selection-toolbar {

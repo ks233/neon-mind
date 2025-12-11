@@ -284,7 +284,10 @@ const isImage = computed(() => props.data.logicNode.contentType === 'image')
 .universal-node.is-image {
     padding: 0;
     border-radius: 0;
-    max-width: none;
+}
+
+.universal-node.is-image.auto-size {
+    min-width: var(--converted-max-width);
 }
 
 /* === 模式 B: 固定大小 === */

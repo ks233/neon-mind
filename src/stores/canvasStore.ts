@@ -217,7 +217,7 @@ export const useCanvasStore = defineStore('canvas', () => {
             contentType: 'image',
             // height 会由 Layout 根据 ratio 算出来
             ratio: 1, // 初始比例，组件加载完会更新
-            width: 400, // 默认宽
+            width: 100, // 默认宽
             relativePath: undefined, // 标记为"未持久化"
             runtimePath: runtimePath, // 立即显示
         } as ImagePayload;

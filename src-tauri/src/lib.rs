@@ -218,10 +218,33 @@ fn process_thumbnail(
     app: &AppHandle,
     file_path: PathBuf,
     target_width: u32,
-) -> Result<Vec<u8>, String> {
+) -> Result<(Vec<u8>, String), String> {
     // 1. 确保源文件存在
     if !file_path.exists() {
         return Err(format!("Source file not found: {:?}", file_path));
+    }
+
+    // === 新增：处理原图请求 (w=0) ===
+    if target_width == 0 {
+        // 直接读取原文件
+        let buffer = fs::read(&file_path).map_err(|e| e.to_string())?;
+
+        // 根据扩展名推断 Mime Type
+        let mime_type = file_path
+            .extension()
+            .and_then(|s| s.to_str())
+            .map(|ext| match ext.to_lowercase().as_str() {
+                "png" => "image/png",
+                "gif" => "image/gif",
+                "webp" => "image/webp",
+                "svg" => "image/svg+xml",
+                "jpg" | "jpeg" => "image/jpeg",
+                _ => "application/octet-stream",
+            })
+            .unwrap_or("application/octet-stream")
+            .to_string();
+
+        return Ok((buffer, mime_type));
     }
 
     // 2. 生成缓存路径
@@ -245,7 +268,7 @@ fn process_thumbnail(
         let mut file = File::open(&cache_path).map_err(|e| e.to_string())?;
         let mut buffer = Vec::new();
         file.read_to_end(&mut buffer).map_err(|e| e.to_string())?;
-        return Ok(buffer);
+        return Ok((buffer, "image/jpeg".to_string()));
     }
 
     // 4. 未命中：生成缩略图 (CPU 密集操作)
@@ -264,8 +287,7 @@ fn process_thumbnail(
 
     // 写入缓存文件
     fs::write(&cache_path, &buffer).map_err(|e| e.to_string())?;
-
-    Ok(buffer)
+    Ok((buffer, "image/jpeg".to_string()))
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -294,9 +316,10 @@ pub fn run() {
 
             // 2. 获取请求 URI
             let uri = request.uri().clone();
-
+            let app_worker = app.clone();
+            let state = app_worker.state::<ThumbnailCacheState>();
             // 3. 开启新线程处理 (如果是线程池方案，使用 state.pool.execute)
-            thread::spawn(move || {
+            state.pool.execute(move || {
                 let uri_str = uri.to_string();
 
                 // === A. 解析 URL 参数 ===
@@ -347,14 +370,14 @@ pub fn run() {
                 // === D. 生成并返回 ===
                 let response = match real_path_opt {
                     Some(real_path) => {
-                        // 调用 process_thumbnail [核心调用]
+                        // [修改] 解构元组 (data, mime_type)
                         match process_thumbnail(&app, real_path, target_width) {
-                            Ok(data) => {
+                            Ok((data, mime_type)) => {
                                 Response::builder()
                                     .status(StatusCode::OK)
-                                    .header(header::CONTENT_TYPE, "image/jpeg")
+                                    // [修改] 使用动态 MimeType
+                                    .header(header::CONTENT_TYPE, mime_type)
                                     .header(header::ACCESS_CONTROL_ALLOW_ORIGIN, "*")
-                                    // 强缓存 1 年，因为 hash 文件名变了 URL 就会变，不用担心更新问题
                                     .header(header::CACHE_CONTROL, "public, max-age=31536000")
                                     .body(data)
                                     .unwrap()
@@ -369,7 +392,6 @@ pub fn run() {
                         }
                     }
                     None => {
-                        // 路径解析失败 (即 resolve_real_path 返回 None)
                         eprintln!("Thumb 404 - Path resolve failed: {}", decoded_path_str);
                         Response::builder()
                             .status(StatusCode::NOT_FOUND)
@@ -386,7 +408,6 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_http::init())
         .plugin(tauri_plugin_opener::init())
-        .invoke_handler(tauri::generate_handler![greet])
         .invoke_handler(tauri::generate_handler![save_temp_image, commit_assets])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

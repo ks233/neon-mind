@@ -3,8 +3,6 @@ import { computed, onMounted, ref, watch } from 'vue'
 import type { ImagePayload } from '@/types/model'
 import { useVueFlow } from '@vue-flow/core';
 import { isNodeInViewport } from '@/utils/viewportUtils';
-import { useUiStore } from '@/stores/uiStore';
-import { useProjectStore } from '@/stores/projectStore';
 import { getResourceUrl } from '@/utils/imageUtils';
 
 // 1. 接收具体类型的 Payload
@@ -20,28 +18,11 @@ const emit = defineEmits<{
 
 const imgRef = ref<HTMLImageElement | null>(null)
 
-// 2. 图片加载完成后计算原始比例
-function onImageLoad() {
-    if (imgRef.value) {
-        const { naturalWidth, naturalHeight } = imgRef.value
-        if (naturalHeight > 0) {
-            const ratio = naturalWidth / naturalHeight
-            // 如果当前比例和记录的不一致，上报更新 (用于 Layout 计算)
-            if (Math.abs(ratio - (props.data.ratio || 0)) > 0.01) {
-                emit('update:ratio', ratio)
-            }
-        }
-    }
-}
 
 // 定义 LOD 等级
 const { viewport, dimensions, findNode } = useVueFlow();
 const LEVEL_SMALL = 500;
 const LEVEL_MEDIUM = 1500;
-
-const uiStore = useUiStore()
-const projectStore = useProjectStore()
-
 
 const isVisible = ref(false);
 const screenPixelWidth = ref(0)
@@ -58,7 +39,7 @@ watch(
             graphNode.dimensions,
             viewport.value,
             dimensions.value,
-            200 // 缓冲区稍微大一点，保证 Medium 加载平滑
+            50 // 缓冲区稍微大一点，保证 Medium 加载平滑
         );
         isVisible.value = inViewport;
         if (!inViewport) {
@@ -81,32 +62,58 @@ const currentSrc = computed(() => {
     let lodWidth = 500; // 或者根据 Zoom 动态计算
     if (screenPixelWidth.value < LEVEL_SMALL) {
         lodWidth = LEVEL_SMALL
+        isLOD.value = true;
     } else if (screenPixelWidth.value < LEVEL_MEDIUM) {
         lodWidth = LEVEL_MEDIUM
+        isLOD.value = true;
+    } else {
+        // 屏幕像素很大，加载原图
+        lodWidth = 0; // 约定 0 为原图，或者你可以设一个极大值比如 4000
+        isLOD.value = false;
     }
     // props.data.localSrc 可能是 "_temp/abc.png" 或 "assets/abc.png"
     return getResourceUrl(props.data.runtimePath ?? '', lodWidth);
 });
 
-const bgLayerSrc = computed(() => getResourceUrl(props.data.relativePath ?? props.data.relativePath ?? '', LEVEL_SMALL))
+const bgLayerSrc = computed(() => getResourceUrl(props.data.runtimePath ?? props.data.relativePath ?? '', LEVEL_SMALL))
+
+// 1. [核心修改] 增加 LOD 状态标记
+const isLOD = ref(false)
+
+// 2. [核心修改] 图片加载回调：LOD 模式下不更新数据
+function onImageLoad() {
+    // 如果是 LOD 图片，它的尺寸可能不准（或者被压缩过），不要用它来更新原始比例
+    if (isLOD.value) return;
+
+    if (imgRef.value) {
+        const { naturalWidth, naturalHeight } = imgRef.value
+        if (naturalHeight > 0) {
+            const ratio = naturalWidth / naturalHeight
+            if (Math.abs(ratio - (props.data.ratio || 0)) > 0.01) {
+                emit('update:ratio', ratio)
+            }
+        }
+    }
+}
 
 </script>
 
 <template>
     <div class="image-content image-wrapper">
         <img
-            v-if="data.relativePath"
             :src="bgLayerSrc"
             class="bg-layer"
-            @load="onImageLoad" />
+            decoding="async" />
         <img
+            v-show="isVisible"
             :src="currentSrc"
             class="main-layer nodrag"
-            decoding="async" />
+            decoding="async"
+            @load="onImageLoad" />
         <div v-if="!data.runtimePath" class="image-placeholder">
             No Image
         </div>
-        <div class="debug"> {{ currentSrc }} </div>
+        <!-- <div class="debug"> {{ currentSrc }} </div> -->
     </div>
 </template>
 
@@ -133,24 +140,25 @@ img {
 }
 
 .bg-layer {
-    position: absolute;
-    top: 0;
-    left: 0;
     width: 100%;
     height: 100%;
     object-fit: contain;
     z-index: 1;
-    /* opacity: 0.5; */
+    /* opacity: 0.2; */
     /* filter: blur(2px); */
     /* 稍微模糊作为背景 */
 }
 
 .main-layer {
+    position: absolute;
+    top: 0;
+    left: 0;
     /* top: 0; */
     /* left: 0; */
     width: 100%;
     height: 100%;
     object-fit: contain;
+    /* opacity: 0; */
     z-index: 2;
 }
 
