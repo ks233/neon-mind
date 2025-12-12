@@ -21,7 +21,15 @@ const imgRef = ref<HTMLImageElement | null>(null)
 
 // 定义 LOD 等级
 const { viewport, dimensions, findNode } = useVueFlow();
-const LEVEL_SMALL = 500;
+
+const LOD_LEVELS = [300, 600, 1500]
+function getLOD(width: number): number {
+    const lod = LOD_LEVELS.find(lodWidth => lodWidth >= width);
+    return lod ?? 0;
+}
+
+
+const LEVEL_SMALL = 300;
 const LEVEL_MEDIUM = 1500;
 
 const isVisible = ref(false);
@@ -58,19 +66,8 @@ watch(
 );
 
 const currentSrc = computed(() => {
-    // 假设这一步算出了需要 500px 的图
-    let lodWidth = 500; // 或者根据 Zoom 动态计算
-    if (screenPixelWidth.value < LEVEL_SMALL) {
-        lodWidth = LEVEL_SMALL
-        isLOD.value = true;
-    } else if (screenPixelWidth.value < LEVEL_MEDIUM) {
-        lodWidth = LEVEL_MEDIUM
-        isLOD.value = true;
-    } else {
-        // 屏幕像素很大，加载原图
-        lodWidth = 0; // 约定 0 为原图，或者你可以设一个极大值比如 4000
-        isLOD.value = false;
-    }
+    let lodWidth = getLOD(screenPixelWidth.value);
+    isLOD.value = lodWidth === 0
     // props.data.localSrc 可能是 "_temp/abc.png" 或 "assets/abc.png"
     return getResourceUrl(props.data.runtimePath ?? '', lodWidth);
 });
@@ -82,7 +79,6 @@ const isLOD = ref(false)
 
 // 2. [核心修改] 图片加载回调：LOD 模式下不更新数据
 function onImageLoad() {
-    // 如果是 LOD 图片，它的尺寸可能不准（或者被压缩过），不要用它来更新原始比例
     if (isLOD.value) return;
 
     if (imgRef.value) {
