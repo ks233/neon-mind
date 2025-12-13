@@ -80,6 +80,10 @@ body,
     display: none !important;
 }
 
+.vue-flow__pane.selection {
+    cursor: default;
+}
+
 /* 内置字体 */
 
 @font-face {

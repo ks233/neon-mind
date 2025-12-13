@@ -101,8 +101,36 @@ function handleUpdate(type: 'content' | 'url' | 'ratio', val: any) {
     }
 }
 
+let resizeStartDim = { width: 0, height: 0 }
+
+function onResizeStart(evt: OnResizeStart) {
+    const { width, height } = evt.params
+    resizeStartDim = { width, height }
+}
+
 function onResize(evt: OnResize) {
-    if (isImage.value) return;
+
+}
+
+// 3. 手动调整大小结束
+function onResizeEnd(evt: OnResizeStart) {
+    if (isImage.value) {
+        canvasStore.updateNodeSize(
+            id,
+            { width: node.dimensions.width, height: node.dimensions.height },
+            { x: snapToGrid(node.position.x), y: snapToGrid(node.position.y) }
+            , true)
+        return;
+    }
+    // 这会将 fixedSize 置为 true，切换到固定模式
+    const deltaWidth = resizeStartDim.width - evt.params.width
+    const deltaHeight = resizeStartDim.height - evt.params.height
+    if (deltaWidth ** 2 + deltaHeight ** 2 < 10 ** 2) {
+        node.dimensions.width = resizeStartDim.width
+        node.dimensions.height = resizeStartDim.height
+        canvasStore.syncModelToView()
+        return
+    }
     const { width, height } = evt.params
 
     const snappedWidth = snapToGrid(width)
@@ -113,12 +141,6 @@ function onResize(evt: OnResize) {
 
     node.dimensions.width = finalWidth
     node.dimensions.height = finalHeight
-}
-
-// 3. 手动调整大小结束
-function onResizeEnd(evt: OnResizeStart) {
-    // 这会将 fixedSize 置为 true，切换到固定模式
-    onResize(evt as OnResize)
     canvasStore.updateNodeSize(
         id,
         { width: node.dimensions.width, height: node.dimensions.height },
@@ -207,8 +229,10 @@ const isImage = computed(() => props.data.logicNode.contentType === 'image')
             :min-height="40"
             :snap-grid="[20, 20]"
             :keep-aspect-ratio="isImage"
+
             line-class-name="invisible-resizer-line"
             handle-class-name="invisible-resizer-handle"
+            @resize-start="onResizeStart"
             @resize="onResize"
             @resize-end="onResizeEnd" />
 
@@ -353,10 +377,10 @@ const isImage = computed(() => props.data.logicNode.contentType === 'image')
 .io-handle {
     width: 6px;
     height: 6px;
-    background: var(--border-color);
+    background-color: var(--border-color);
     opacity: 0;
-    transition: opacity 0.2s;
-    z-index: -100;
+    transition: opacity 0.1s;
+    /* z-index: -100; */
 }
 
 /* [核心代码] 使用伪元素扩大判定范围 */
@@ -370,8 +394,9 @@ const isImage = computed(() => props.data.logicNode.contentType === 'image')
     right: -8px;
 
     /* 调试用：如果想看到热区，可以取消下面这行的注释 */
-    background: rgba(255, 255, 255, 0.1);
+    /* background: rgba(255, 255, 255, 0.1); */
 
+    z-index: -100;
     border-radius: 50%;
     /* 热区也设为圆形，手感更好 */
 }
@@ -385,7 +410,6 @@ const isImage = computed(() => props.data.logicNode.contentType === 'image')
 .io-handle:hover {
     /* 视觉反馈 */
     opacity: 1;
-    background: #1890ff;
     /* 激活色 */
 }
 
@@ -432,23 +456,50 @@ const isImage = computed(() => props.data.logicNode.contentType === 'image')
 
 
 /* 强制隐藏线条 */
+
 :deep(.invisible-resizer-line) {
+    border-color: #fff;
     opacity: 0 !important;
+    z-index: -105;
 }
+
+.selected:deep(.invisible-resizer-line) {
+    border-color: #fff;
+    z-index: 105;
+}
+
+:deep(.invisible-resizer-line.right) {
+    border-right-width: 6px;
+}
+
+:deep(.invisible-resizer-line.left) {
+    border-left-width: 6px;
+}
+
+:deep(.invisible-resizer-line.top) {
+    border-top-width: 6px;
+}
+
+:deep(.invisible-resizer-line.bottom) {
+    border-bottom-width: 6px;
+}
+
 
 /* 强制隐藏手柄，但保留鼠标交互 */
 :deep(.invisible-resizer-handle) {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
     background: transparent !important;
     border: none !important;
+    /* background: var(--border-color) !important; */
     /* 关键：虽然看不见，但鼠标放上去要变光标，且能点击 */
     /* VueFlow 默认样式已经处理了 cursor，这里只要确保它不透明度为0即可 */
+    z-index: -104;
 }
 
-/* 可选：当鼠标悬停在节点上时，微微显示一点手柄提示用户可以缩放？ */
-/* 如果想要纯粹的 PureRef 风格（完全看不见），下面这段可以不加 */
-.universal-node:hover :deep(.invisible-resizer-handle),
-.universal-node:hover :deep(.invisible-resizer-line) {
-    opacity: 0.1;
+.selected:deep(.invisible-resizer-handle) {
+    z-index: 106;
 }
 
 .debug-info {
