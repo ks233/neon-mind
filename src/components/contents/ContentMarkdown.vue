@@ -3,12 +3,12 @@ import MarkdownIt from 'markdown-it'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 // CodeMirror 核心
 import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirror/commands'
-import { markdown, markdownLanguage } from '@codemirror/lang-markdown'
+import { markdown as markdownLang, markdownLanguage } from '@codemirror/lang-markdown'
 import { languages } from '@codemirror/language-data'
-import { EditorState } from '@codemirror/state'
+import { Compartment, EditorState } from '@codemirror/state'
 import { EditorView, keymap } from '@codemirror/view'
 // 导入样式
-import { baseTheme, markdownHighlighting } from '@/config/editorTheme'
+import { baseTheme, codeFontTheme, markdownFontTheme, markdownHighlighting } from '@/config/editorTheme'
 import { markdownKeymapExtension } from '@/config/markdownCommands'
 import { useProjectStore } from '@/stores/projectStore'
 import type { MarkdownPayload } from '@/types/model'
@@ -23,6 +23,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
     (e: 'update:content', val: string): void
+    (e: 'update:language', val: string): void
     (e: 'blur'): void
     (e: 'command', key: string): void
 }>()
@@ -36,6 +37,9 @@ import { autoSpaceExtension } from './autoSpaceExt'
 import { smartWordExtension } from './smartWordExt'
 
 const projectStore = useProjectStore()
+
+const isCodeMode = computed(() => !!props.data.language && props.data.language !== 'markdown')
+
 
 //#region === 1. 阅读模式逻辑 (MarkdownIt) ===
 
@@ -232,7 +236,7 @@ function toggleTask(content: string, lineIndex: number, checked: boolean): strin
     return lines.join('\n')
 }
 
-const renderedHtml = computed(() => md.render(props.data.content || ''))
+const markdownHtml = computed(() => md.render(props.data.content || ''))
 
 //#endregion
 
@@ -240,11 +244,31 @@ const renderedHtml = computed(() => md.render(props.data.content || ''))
 const editorRef = ref<HTMLElement | null>(null)
 let view: EditorView | null = null
 
+const languageConf = new Compartment()
+const themeConf = new Compartment()
+
+// 动态加载语言扩展
+async function getLanguageExtension(langName?: string) {
+    if (!langName || langName === 'markdown') {
+        return markdownLang({ codeLanguages: languages })
+    }
+
+    // 在 language-data 中查找
+    const langDesc = languages.find(l =>
+        l.name === langName || l.alias.includes(langName)
+    )
+
+    if (langDesc) {
+        return await langDesc.load()
+    }
+    return [] // 没找到就回退到纯文本
+}
+
 let initialContent = ''
 let currentContent = ''
 
 // 初始化编辑器
-function initEditor() {
+async function initEditor() {
     if (!editorRef.value || view) return
 
     const filteredDefaultKeymap = defaultKeymap.filter(
@@ -258,6 +282,7 @@ function initEditor() {
     if (initialContent.length > 20) {
         selectionRange.anchor = initialContent.length
     }
+    const langExtension = await getLanguageExtension(props.data.language)
     const state = EditorState.create({
         doc: initialContent,
         selection: selectionRange,
@@ -266,10 +291,8 @@ function initEditor() {
             markdownHighlighting,
             history(),
             keymap.of([indentWithTab, ...filteredDefaultKeymap, ...historyKeymap]),
-            markdown({
-                base: markdownLanguage,
-                codeLanguages: languages,
-            }),
+            languageConf.of(langExtension),
+            themeConf.of(isCodeMode.value ? codeFontTheme : markdownFontTheme),
             EditorView.lineWrapping, // 自动换行
             EditorView.updateListener.of((u) => {
                 const docString = u.state.doc.toString()
@@ -279,7 +302,13 @@ function initEditor() {
                 }
                 // 如果焦点丢失了 (blur)，通知父组件退出编辑
                 if (u.focusChanged && !u.view.hasFocus) {
-                    emit('blur')
+                    setTimeout(() => {
+                        // 如果当前焦点跑到了语言输入框上，说明还在编辑，不要退出
+                        if (document.activeElement?.classList.contains('lang-input')) {
+                            return;
+                        }
+                        emit('blur');
+                    }, 0);
                 }
             }),
             markdownKeymapExtension,
@@ -300,6 +329,23 @@ function initEditor() {
         if (view && !view.hasFocus) view.focus();
     }, 10);
 }
+
+watch(() => props.data.language, async (newLang) => {
+    if (view && props.isEditing) {
+        const langExt = await getLanguageExtension(newLang)
+
+        // 判断新的模式
+        const isCode = !!newLang && newLang !== 'markdown' // [!code focus]
+
+        view.dispatch({
+            effects: [
+                languageConf.reconfigure(langExt),
+                // [!code focus] 动态切换字体
+                themeConf.reconfigure(isCode ? codeFontTheme : markdownFontTheme)
+            ]
+        })
+    }
+})
 
 // 销毁编辑器
 function destroyEditor() {
@@ -396,6 +442,41 @@ function onMouseDown(e: MouseEvent) {
 }
 
 //#endregion
+
+// B. 代码高亮渲染器 (新增)
+const highlightedCode = computed(() => {
+    const code = props.data.content || ''
+    const lang = props.data.language || 'plaintext'
+
+    if (hljs.getLanguage(lang)) {
+        try {
+            return hljs.highlight(code, { language: lang, ignoreIllegals: true }).value
+        } catch (__) { }
+    }
+    // 兜底转义
+    return md.utils.escapeHtml(code)
+})
+
+
+// [!code focus:5] 处理语言修改
+function onLanguageChange(e: Event) {
+    const target = e.target as HTMLInputElement
+    // 实时更新，如果用户清空了内容，isCodeMode 会自动变为 false，输入框也会随即消失
+    emit('update:language', target.value)
+}
+
+function onInputBlur(e: FocusEvent) {
+    // 获取焦点转移的目标元素
+    const related = e.relatedTarget as HTMLElement;
+
+    // 如果焦点转移到了 CodeMirror 编辑器内部 (通常是 cm-content 或其父级)
+    // 则认为仍在编辑中，不触发 blur
+    if (related && (related.classList.contains('cm-content') || related.closest('.cm-editor'))) {
+        return;
+    }
+
+    emit('blur');
+}
 </script>
 
 <template>
@@ -404,7 +485,8 @@ function onMouseDown(e: MouseEvent) {
         :class="{
             'is-fixed': fixedSize,
             'nodrag': isEditing,
-            'is-editing': isEditing
+            'is-editing': isEditing,
+            'is-code': isCodeMode
         }"
         @keypress.stop
         @keydown.stop
@@ -420,19 +502,46 @@ function onMouseDown(e: MouseEvent) {
             @scroll.stop
             @wheel="onWheel"></div>
 
-        <div
-            v-else
-            class="markdown-body"
-            v-html="renderedHtml"></div>
+        <div v-else class="preview-container">
+            <pre v-if="isCodeMode"
+                class="hljs-container"><code class="hljs" :class="`language-${data.language}`" v-html="highlightedCode"></code></pre>
+
+            <div
+                v-else
+                class="markdown-body"
+                v-html="markdownHtml"></div>
+        </div>
+        <div v-if="isCodeMode && !isEditing" class="lang-badge">
+            {{ data.language }}
+        </div>
+
+        <input
+            v-if="isCodeMode && isEditing"
+            class="lang-input"
+            :value="data.language"
+            @input="onLanguageChange"
+            @keydown.stop
+            @mousedown.stop
+            @blur="onInputBlur"
+            placeholder="Language"
+            title="输入 markdown 退出代码模式" />
     </div>
+
 </template>
 
 <style scoped>
 .md-wrapper {
-    width: 100%;
+    box-sizing: border-box;
     height: 100%;
+    width: 100%;
+    padding: 6px 8px;
     display: flex;
     flex-direction: column;
+}
+
+.md-wrapper.is-code {
+    padding: 10px;
+    padding-bottom: 20px;
 }
 
 /* === 滚动条控制 === */
@@ -456,7 +565,10 @@ function onMouseDown(e: MouseEvent) {
 .cm-container {
     height: 100%;
 }
+</style>
 
+<!-- Markdown -->
+<style scoped>
 /* === Markdown 预览样式 (仿 Obsidian) === */
 .markdown-body {
     /* 允许点击穿透，方便未进入编辑时拖拽节点 */
@@ -585,68 +697,6 @@ function onMouseDown(e: MouseEvent) {
      这能保证图片既不超过容器，又能按需填充(cover)或完整显示(contain) */
 }
 
-/* ... 原有样式 ... */
-
-/* === 自定义滚动条样式 === */
-
-/* 1. 定义滚动条的整体尺寸 */
-.md-wrapper::-webkit-scrollbar,
-:deep(.cm-scroller)::-webkit-scrollbar {
-    width: 6px;
-    /* 纵向滚动条宽度 */
-    height: 6px;
-    /* 横向滚动条高度 */
-}
-
-/* 2. 定义滚动条轨道 (Track) - 通常设为透明 */
-.md-wrapper::-webkit-scrollbar-track,
-:deep(.cm-scroller)::-webkit-scrollbar-track {
-    background: transparent;
-}
-
-/* 3. 定义滑块 (Thumb) - 核心样式 */
-.md-wrapper::-webkit-scrollbar-thumb,
-:deep(.cm-scroller)::-webkit-scrollbar-thumb {
-    /* 使用半透明灰色，这样在深色/浅色模式下都能看清 */
-    background-color: rgba(150, 150, 150, 0.3);
-    border-radius: 4px;
-    /* 圆角 */
-}
-
-/* 4. 鼠标悬停在滑块上时加深颜色 */
-.md-wrapper::-webkit-scrollbar-thumb:hover,
-:deep(.cm-scroller)::-webkit-scrollbar-thumb:hover {
-    background-color: rgba(150, 150, 150, 0.6);
-}
-
-/* 5. (可选) 只有在鼠标悬停在容器上时才显示滚动条 */
-/* 这会让界面更像 Notion，平时极其干净 */
-/* .md-wrapper:not(:hover)::-webkit-scrollbar-thumb,
-.md-wrapper:not(:hover) :deep(.cm-scroller)::-webkit-scrollbar-thumb {
-  background-color: transparent;
-} */
-
-/* 使链接能被点击 */
-:deep(a) {
-    /* 1. 强制允许响应鼠标 (关键!) */
-    /* 防止父级可能存在的 pointer-events: none 继承下来 */
-    pointer-events: auto !important;
-
-    /* 2. 提升层级上下文 */
-    /* 防止被同级的 absolute 遮罩层盖住 */
-    position: relative;
-    z-index: 10;
-
-    /* 3. 鼠标手势 */
-    cursor: pointer;
-}
-
-/* 确保预览层本身也是可交互的 */
-.preview-layer {
-    pointer-events: auto;
-}
-
-
 /* === Markdown 表格与代码块样式 === */
 
 /* 注意：v-html 生成的内容需要使用 :deep() 选择器 */
@@ -698,9 +748,10 @@ function onMouseDown(e: MouseEvent) {
     overflow-wrap: break-word;
     /* 兼容性更好的断行写法 */
 }
+</style>
 
-/* [!code focus:60] === 修复后的任务列表样式 === */
-
+<!-- Markdown Todo -->
+<style scoped>
 /* 1. 针对包含任务列表的 ul (插件通常会添加 contains-task-list 类，如果没有，ul 也会生效) */
 :deep(.contains-task-list),
 :deep(ul:has(.task-list-item)) {
@@ -769,5 +820,145 @@ function onMouseDown(e: MouseEvent) {
     background-position: center;
     background-repeat: no-repeat;
     background-size: 80%;
+}
+</style>
+
+<!-- 使链接能被点击 -->
+<style scoped>
+:deep(a) {
+    /* 1. 强制允许响应鼠标 (关键!) */
+    /* 防止父级可能存在的 pointer-events: none 继承下来 */
+    pointer-events: auto !important;
+
+    /* 2. 提升层级上下文 */
+    /* 防止被同级的 absolute 遮罩层盖住 */
+    position: relative;
+    z-index: 10;
+
+    /* 3. 鼠标手势 */
+    cursor: pointer;
+}
+
+/* 确保预览层本身也是可交互的 */
+.preview-layer {
+    pointer-events: auto;
+}
+</style>
+
+<!-- CM 滚动条 -->
+<style scoped>
+/* === 自定义滚动条样式 === */
+
+/* 1. 定义滚动条的整体尺寸 */
+.md-wrapper::-webkit-scrollbar,
+:deep(.cm-scroller)::-webkit-scrollbar {
+    width: 6px;
+    /* 纵向滚动条宽度 */
+    height: 6px;
+    /* 横向滚动条高度 */
+}
+
+/* 2. 定义滚动条轨道 (Track) - 通常设为透明 */
+.md-wrapper::-webkit-scrollbar-track,
+:deep(.cm-scroller)::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+/* 3. 定义滑块 (Thumb) - 核心样式 */
+.md-wrapper::-webkit-scrollbar-thumb,
+:deep(.cm-scroller)::-webkit-scrollbar-thumb {
+    /* 使用半透明灰色，这样在深色/浅色模式下都能看清 */
+    background-color: rgba(150, 150, 150, 0.3);
+    border-radius: 4px;
+    /* 圆角 */
+}
+
+/* 4. 鼠标悬停在滑块上时加深颜色 */
+.md-wrapper::-webkit-scrollbar-thumb:hover,
+:deep(.cm-scroller)::-webkit-scrollbar-thumb:hover {
+    background-color: rgba(150, 150, 150, 0.6);
+}
+
+/* 5. (可选) 只有在鼠标悬停在容器上时才显示滚动条 */
+/* 这会让界面更像 Notion，平时极其干净 */
+/* .md-wrapper:not(:hover)::-webkit-scrollbar-thumb,
+.md-wrapper:not(:hover) :deep(.cm-scroller)::-webkit-scrollbar-thumb {
+  background-color: transparent;
+} */
+</style>
+
+<!-- 代码模式 -->
+<style scoped>
+.hljs-container {
+    margin: 0;
+    padding: 0;
+    height: 100%;
+    overflow: auto;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    word-wrap: break-word;
+    /* 允许滚动 */
+    font-family: var(--md-code-font);
+    font-size: var(--md-font-size);
+    line-height: var(--md-line-height);
+    background-color: transparent;
+    /* 使用节点背景 */
+}
+
+code {
+    font-family: var(--md-code-font);
+}
+
+.hljs {
+    background: transparent !important;
+    padding: 0 !important;
+    /* white-space: pre; */
+    text-wrap: wrap;
+}
+
+/* 语言角标 */
+.lang-badge {
+    position: absolute;
+    bottom: 2px;
+    right: 4px;
+    font-size: 10px;
+    opacity: 0.4;
+    color: var(--text-color);
+    pointer-events: none;
+    text-transform: uppercase;
+}
+
+/* 输入框样式 */
+.lang-input {
+
+    position: absolute;
+    bottom: 2px;
+    right: 4px;
+    font-size: 10px;
+    color: var(--text-color);
+
+    text-align: right;
+    /* 视觉样式 */
+    color: var(--text-color);
+    background-color: #00000044;
+    border: none;
+
+    /* 尺寸与交互 */
+    width: 80px;
+    opacity: 1;
+    outline: none;
+    transition: all 0.2s;
+
+    z-index: 10;
+    /* 确保在编辑器上方 */
+}
+
+::selection {
+    background: var(--md-selection-bg);
+}
+
+::-moz-selection {
+    background: var(--md-selection-bg);
 }
 </style>

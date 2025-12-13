@@ -7,10 +7,10 @@ import ContentImage from '@/components/contents/ContentImage.vue';
 import ContentLink from '@/components/contents/ContentLink.vue';
 
 export function resolveContentComponent(type: string) {
-  switch (type) {
-    case 'image': return ContentImage;
-    case 'link': return ContentLink;
-    case 'markdown': 
-    default: return ContentMarkdown;
-  }
+    switch (type) {
+        case 'image': return ContentImage;
+        case 'link': return ContentLink;
+        case 'markdown':
+        default: return ContentMarkdown;
+    }
 }

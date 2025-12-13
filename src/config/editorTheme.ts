@@ -8,13 +8,11 @@ export const baseTheme = EditorView.theme({
         fontSize: "var(--md-font-size)",
         backgroundColor: "transparent",
         height: "100%",
-        color: "var(--md-color)",
-        fontFamily: "var(--md-font-family)",
+        color: "var(--md-color)"
     },
     ".cm-content": {
         padding: "4px 0", // 与预览模式的 padding 保持一致
         lineHeight: "var(--md-line-height)",
-        fontFamily: "var(--md-font-family) !important",
         caretColor: "var(--md-color)",
     },
     ".cm-gutters": { display: "none" },
@@ -33,6 +31,25 @@ export const baseTheme = EditorView.theme({
         backgroundColor: "var(--md-selection-bg) !important",
     },
 })
+
+export const markdownFontTheme = EditorView.theme({
+    "&": {
+        fontFamily: "var(--md-font-family) !important",
+    },
+    ".cm-content": {
+        fontFamily: "var(--md-font-family) !important",
+    }
+})
+
+export const codeFontTheme = EditorView.theme({
+    "&": {
+        fontFamily: "var(--md-code-font) !important",
+    },
+    ".cm-content": {
+        fontFamily: "var(--md-code-font) !important",
+    }
+})
+
 
 // 2. 语法高亮 (映射到 CSS 变量)
 export const markdownHighlighting = syntaxHighlighting(HighlightStyle.define([
@@ -77,5 +94,36 @@ export const markdownHighlighting = syntaxHighlighting(HighlightStyle.define([
     { tag: tags.link, color: "var(--md-link-color)", textDecoration: "var(--md-link-decoration)" },
 
     // 列表符号
-    { tag: tags.list }
+    { tag: tags.list },
+
+
+    // === [新增] 代码块语法高亮 (Atom One Dark 风格) ===
+    // 这种风格能确保编辑时的代码颜色与 highlight.js 的 atom-one-dark.css 一致
+
+    // 关键字 (紫色)
+    { tag: [tags.keyword, tags.operatorKeyword, tags.modifier], color: "#c678dd" },
+
+    // 字符串 (绿色)
+    { tag: [tags.string, tags.special(tags.string)], color: "#98c379" },
+
+    // 数字、布尔值、常量 (橙色)
+    { tag: [tags.number, tags.bool, tags.atom, tags.constant(tags.variableName)], color: "#d19a66" },
+
+    // 变量名、属性名 (红色)
+    { tag: [tags.variableName, tags.attributeName, tags.propertyName, tags.labelName], color: "#abb2bf" },
+
+    // 函数名 (蓝色)
+    { tag: [tags.function(tags.variableName), tags.function(tags.propertyName)], color: "#61afef" },
+
+    // 类型、类名 (黄色)
+    { tag: [tags.typeName, tags.className, tags.standard(tags.string)], color: "#e5c07b" },
+
+    // 运算符、正则、特殊字符 (青色)
+    { tag: [tags.operator, tags.regexp, tags.escape, tags.special(tags.string)], color: "#56b6c2" },
+
+    // 注释 (灰色斜体)
+    { tag: [tags.comment, tags.lineComment, tags.blockComment], color: "#5c6370", fontStyle: "italic" },
+
+    // 标点符号 (默认前景色)
+    { tag: [tags.punctuation, tags.bracket], color: "#abb2bf" },
 ]))

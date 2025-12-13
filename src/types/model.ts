@@ -38,6 +38,7 @@ interface BaseNode {
 export interface MarkdownPayload extends BaseNode {
     contentType: 'markdown';
     content: string;
+    language?: string;
 }
 
 export interface ImagePayload extends BaseNode {

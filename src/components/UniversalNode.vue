@@ -23,7 +23,7 @@ const canvasStore = useCanvasStore()
 const uiStore = useUiStore()
 
 import { useUiStore } from '@/stores/uiStore'
-import { ImagePayload, LogicNode } from '@/types/model'
+import { ImagePayload, LogicNode, MarkdownPayload } from '@/types/model'
 import { resolveContentComponent } from '@/utils/contentResolver'
 import { snapToGrid } from '@/utils/grid'
 
@@ -85,7 +85,7 @@ function onDblClick(evt: MouseEvent) {
     isEditing.value = true
 }
 
-function handleUpdate(type: 'content' | 'url' | 'ratio', val: any) {
+function handleUpdate(type: 'content' | 'url' | 'ratio' | 'language', val: any) {
     switch (type) {
         case 'content':
             canvasStore.updateNodeContent(id, val);
@@ -97,6 +97,9 @@ function handleUpdate(type: 'content' | 'url' | 'ratio', val: any) {
         case 'ratio':
             // 图片加载完成后更新比例，用于排版
             canvasStore.updateNodeData(id, { ratio: val });
+            break;
+        case 'language': // [!code focus]
+            canvasStore.updateNodeData(id, { language: val });
             break;
     }
 }
@@ -197,6 +200,85 @@ const nodeStyles = computed(() => {
 })
 
 const isImage = computed(() => props.data.logicNode.contentType === 'image')
+const isCode = computed(() =>
+    props.data.logicNode.contentType === 'markdown' &&
+    props.data.logicNode.language &&
+    props.data.logicNode.language !== '')
+
+//#region 右键菜单
+
+const contextMenu = ref({
+    show: false,
+    x: 0,
+    y: 0
+})
+
+function onContextMenu(e: MouseEvent) {
+    // 仅针对 Markdown 类型显示
+    if (props.data.logicNode.contentType !== 'markdown') {
+        return;
+    }
+
+    e.preventDefault();
+    e.stopPropagation();
+
+    contextMenu.value = {
+        show: true,
+        x: e.clientX,
+        y: e.clientY
+    }
+}
+
+function closeContextMenu() {
+    contextMenu.value.show = false;
+}
+
+import flourite from 'flourite';
+
+// 修改 toggleCodeMode 函数
+async function toggleCodeMode() {
+    const payload = props.data.logicNode as MarkdownPayload;
+    // 判断当前是否是代码模式
+    const isCode = !!payload.language && payload.language !== 'markdown';
+
+    let targetLanguage: string | undefined = undefined;
+
+    if (!isCode) {
+        // === 准备切换为代码模式：自动检测语言 ===
+        const content = payload.content || '';
+
+        // 只有内容不为空时才检测，否则默认 javascript
+        if (content.trim()) {
+            try {
+                const result = flourite(content);
+                console.log(result)
+                // highlightAuto 会尝试匹配所有已注册的语言，返回相关度最高的一个
+                // const result = hljs.highlightAuto(content, COMMON_LANGUAGES);
+                // 如果检测出的 relevance 太低(可选)，或者没检测出来，回退到 plaintext 或 javascript
+                targetLanguage = result.language.toLowerCase() || 'javascript';
+
+                // console.log(`Auto-detected language: ${targetLanguage} (relevance: ${result.relevance})`);
+            } catch (e) {
+                console.warn('Language detection failed:', e);
+                targetLanguage = 'javascript';
+            }
+        } else {
+            targetLanguage = 'javascript';
+        }
+    } else {
+        // === 准备切换回 Markdown ===
+        targetLanguage = undefined;
+    }
+
+    // 更新数据
+    canvasStore.updateNodeData(id, {
+        language: targetLanguage
+    });
+
+    closeContextMenu();
+}
+//#endregion
+
 
 </script>
 
@@ -215,13 +297,15 @@ const isImage = computed(() => props.data.logicNode.contentType === 'image')
             'dragging': dragging || isCarried,
             'is-detaching': isDetaching,
             'is-editing': isEditing,
-            'is-image': isImage
+            'is-image': isImage,
+            'is-code': isCode
         }"
         @dblclick="onDblClick"
         :style="nodeStyles"
         @mouseenter="showDebug = true"
         @mouseleave="showDebug = false"
-        @mousedown.prevent="handleMouseDown">
+        @mousedown.prevent="handleMouseDown"
+        @contextmenu="onContextMenu">
 
         <NodeResizer
             :is-visible="true"
@@ -258,7 +342,8 @@ const isImage = computed(() => props.data.logicNode.contentType === 'image')
                 @command="onContentCommand"
                 @update:content="(v: any) => handleUpdate('content', v)"
                 @update:url="(v: any) => handleUpdate('url', v)"
-                @update:ratio="(v: any) => handleUpdate('ratio', v)" />
+                @update:ratio="(v: any) => handleUpdate('ratio', v)"
+                @update:language="(v: any) => handleUpdate('language', v)" />
         </div>
 
         <div v-show="showDebug" class="debug-info">
@@ -272,6 +357,22 @@ const isImage = computed(() => props.data.logicNode.contentType === 'image')
             </template>
             <!-- {{ data.logicNode.width }} -->
         </div>
+        <Teleport to="body">
+            <div v-if="contextMenu.show" class="context-menu-overlay" @click="closeContextMenu"
+                @contextmenu.prevent="closeContextMenu">
+                <div class="node-context-menu" :style="{ left: contextMenu.x + 'px', top: contextMenu.y + 'px' }"
+                    @click.stop>
+                    <div class="menu-item" @click="toggleCodeMode">
+                        <span class="icon">
+                            {{ (data.logicNode as MarkdownPayload).language ? 'M↓' : '{}' }}
+                        </span>
+                        <span class="label">
+                            {{ (data.logicNode as MarkdownPayload).language ? '转换为 Markdown' : '转换为代码块' }}
+                        </span>
+                    </div>
+                </div>
+            </div>
+        </Teleport>
     </div>
 </template>
 
@@ -310,6 +411,11 @@ const isImage = computed(() => props.data.logicNode.contentType === 'image')
     border-radius: 0;
 }
 
+.universal-node.is-code.auto-size {
+    min-height: 60px;
+    max-width: none;
+}
+
 .universal-node.is-image.auto-size {
     min-width: var(--converted-max-width);
 }
@@ -337,8 +443,7 @@ const isImage = computed(() => props.data.logicNode.contentType === 'image')
     position: relative;
     display: grid;
     min-height: 24px;
-    padding: 6px 8px;
-    padding-bottom: 2px;
+    padding: 0;
     overflow: hidden;
 }
 
@@ -510,5 +615,71 @@ const isImage = computed(() => props.data.logicNode.contentType === 'image')
     /* 留一点间隙 */
     /* 可选：加个小阴影 */
     /* box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2); */
+}
+
+/* 右键菜单 */
+.context-menu-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 9999;
+    /* 确保在最顶层 */
+    background: transparent;
+}
+
+.node-context-menu {
+    position: fixed;
+    background: var(--node-bg, #fff);
+    border: 1px solid var(--border-color, #ccc);
+    border-radius: 6px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    padding: 4px;
+    min-width: 140px;
+    z-index: 10000;
+    /* 简单的入场动画 */
+    animation: menu-fade-in 0.1s ease-out;
+}
+
+.dark .node-context-menu {
+    background: #1e1e1e;
+    border-color: #333;
+}
+
+.node-context-menu .menu-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 10px;
+    cursor: pointer;
+    border-radius: 4px;
+    font-size: 13px;
+    color: var(--text-color);
+    transition: background-color 0.1s;
+}
+
+.node-context-menu .menu-item:hover {
+    background-color: rgba(0, 0, 0, 0.05);
+}
+
+.dark .node-context-menu .menu-item:hover {
+    background-color: rgba(255, 255, 255, 0.1);
+}
+
+.node-context-menu .icon {
+    font-family: 'JetBrains Mono';
+    opacity: 0.7;
+    width: 16px;
+    text-align: center;
+}
+
+@keyframes menu-fade-in {
+    from {
+        opacity: 0;
+        transform: scale(0.95);
+    }
+
+    to {
+        opacity: 1;
+        transform: scale(1);
+    }
 }
 </style>

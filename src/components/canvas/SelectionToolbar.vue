@@ -33,8 +33,6 @@ const uiStore = useUiStore()
 function setAutoSize() {
     store.updateNodesBatch(uiStore.getSelectedNodeIds(), (node) => {
         node.fixedSize = false;
-        node.width = 0;
-        node.height = 0;
     });
 }
 
