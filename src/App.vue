@@ -611,7 +611,6 @@ function onAppMouseDown(e: MouseEvent) {
 
     padding: 8px 12px;
     border-radius: 6px;
-    font-family: 'Consolas', 'Monaco', monospace;
     /* 等宽字体 */
     font-size: 12px;
     line-height: 1.5;

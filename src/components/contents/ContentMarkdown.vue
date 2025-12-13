@@ -541,11 +541,11 @@ function onMouseDown(e: MouseEvent) {
     font-family: var(--md-code-font);
     color: var(--md-code-color);
     border-radius: var(--md-code-radius);
-    padding: 0 4px;
 }
 
 .markdown-body :deep(code):not(pre code) {
     background-color: var(--md-code-bg);
+    padding: 0 4px;
 }
 
 
@@ -563,7 +563,11 @@ function onMouseDown(e: MouseEvent) {
     margin-bottom: 0.5em;
 }
 
-.markdown-body :deep(ul),
+.markdown-body :deep(ul) {
+    padding-left: 1.2em;
+}
+
+
 .markdown-body :deep(ol) {
     padding-left: 1.2em;
 }

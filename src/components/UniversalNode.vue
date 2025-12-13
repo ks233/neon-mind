@@ -460,7 +460,6 @@ const isImage = computed(() => props.data.logicNode.contentType === 'image')
     padding: 4px 0px;
     border-radius: 4px;
     font-size: 11px;
-    font-family: 'Consolas', monospace;
     line-height: 1;
     white-space: nowrap;
     /* 禁止换行 */

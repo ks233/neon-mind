@@ -1,7 +1,37 @@
 /* 1. 根变量 (定义材质球属性) */
 :root {
-    font-family: Inter, Avenir, Helvetica, Arial, sans-serif;
+    font-family: var(--default-font-family);
+    --default-font-family:
+        /* 1. 现代 CSS 标准关键字，自动调用系统 UI 字体 */
+        system-ui,
 
+        /* 2. 针对 macOS / iOS (San Francisco) */
+        -apple-system, BlinkMacSystemFont,
+
+        /* 3. 针对 Windows (Segoe UI) */
+        "Segoe UI",
+
+        /* 4. 针对 Android / Chrome OS (Roboto) */
+        Roboto,
+
+        /* 5. 针对 Linux (Ubuntu / Noto) */
+        "Helvetica Neue", Arial, "Noto Sans",
+
+        /* 6. --- 关键的中文字体回退区 --- */
+        "PingFang SC",
+        /* Mac 简体中文 (苹方) */
+        "Hiragino Sans GB",
+        /* Mac 旧版中文 (冬青黑) */
+        "Microsoft YaHei",
+        /* Windows 简体中文 (微软雅黑) - 必写！*/
+        "WenQuanYi Micro Hei",
+        /* Linux 常用中文 */
+
+        /* 7. 最后的保底 */
+        sans-serif,
+
+        /* 8. Emoji 字体 (防止 Emoji 变成方块) */
+        "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
     /* 浅色模式变量 */
     --bg-color: #ffffff;
     --node-bg: #ffffff;
@@ -13,6 +43,9 @@
 
     /* 禁用 iOS/Mac 橡皮筋滚动 */
     overscroll-behavior: none;
+
+    /* 连字符 */
+    font-variant-ligatures: common-ligatures;
 }
 
 /* 2. 深色模式覆盖 */
@@ -45,4 +78,23 @@ body,
 /* 禁用 VueFlow 多选节点后的蓝色包围框 */
 .vue-flow__nodesselection {
     display: none !important;
+}
+
+/* 内置字体 */
+
+@font-face {
+    font-family: 'JetBrains Mono';
+    src: url('./assets/fonts/JetBrainsMono-Medium.woff2') format('woff2');
+    font-weight: normal;
+    font-style: normal;
+    font-display: swap;
+}
+
+/* 定义粗体 */
+@font-face {
+    font-family: 'JetBrains Mono';
+    src: url('./assets/fonts/JetBrainsMono-Bold.woff2') format('woff2');
+    font-weight: bold;
+    font-style: normal;
+    font-display: swap;
 }
