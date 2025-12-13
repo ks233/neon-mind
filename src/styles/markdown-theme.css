@@ -1,4 +1,4 @@
-:root.dark {
+:root {
     /* === 基础排版 === */
     --md-font-family: var(--default-font-family);
     --md-font-size: 14px;

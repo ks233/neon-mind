@@ -15,7 +15,7 @@ import SelectionToolbar from '@/components/canvas/SelectionToolbar.vue'
 
 import { useCanvasStore } from '@/stores/canvasStore'
 
-import { useDark, useMouse, useToggle } from '@vueuse/core'
+import { useMouse } from '@vueuse/core'
 
 import { snapToGrid, snapToGridXY } from '@/utils/grid'
 import { useGlobalInteractions } from './composables/useGlobalInteractions'
@@ -52,19 +52,6 @@ const { screenToFlowCoordinate, addEdges, updateEdge } = useVueFlow()
 
 const gridSize = ref<number>(20)
 const DETACH_DISTANCE = 60;
-// #endregion
-
-// #region 深色模式
-
-// useDark 会自动检测系统偏好，并给 <html> 标签添加 'dark' class
-const isDark = useDark()
-const toggleDark = useToggle(isDark)
-
-// 计算属性：根据模式返回网格颜色 (Hex值)
-// 相当于在 Update() 里动态修改 Material 颜色
-const gridColor = computed(() => isDark.value ? '#3a3a3a' : '#e5e5e5')
-const edgeColor = computed(() => isDark.value ? '#666' : '#b1b1b7')
-
 // #endregion
 
 // #region 创建节点
@@ -527,9 +514,6 @@ function onAppMouseDown(e: MouseEvent) {
 </script>
 
 <template>
-    <!-- <button class="theme-toggle" @click="toggleDark()">
-        {{ isDark ? '🌙' : '☀️' }}
-    </button> -->
     <div class="app-container"
         @pointerdown.capture="onPanePointerDown"
         @mousedown.capture="onAppMouseDown"
@@ -548,7 +532,7 @@ function onAppMouseDown(e: MouseEvent) {
             multi-selection-key-code="Control"
             :default-edge-options="{
                 type: 'smoothstep',
-                style: { strokeWidth: 2, color: edgeColor, 'font-size': 20 },
+                style: { strokeWidth: 2, color: 'var(--line-color)', 'font-size': 20 },
                 interactionWidth: 50,
             }"
             :min-zoom="0.25"
@@ -568,7 +552,7 @@ function onAppMouseDown(e: MouseEvent) {
             :only-render-visible-elements="false"
             :snap-to-grid="false"
             :snap-grid="[gridSize, gridSize]">
-            <Background variant="dots" :gap="gridSize" :color="gridColor" :size="2" :offset="[20, 20]" />
+            <Background variant="dots" :gap="gridSize" color="var(--grid-color)" :size="2" :offset="[20, 20]" />
             <!-- <Controls /> -->
         </VueFlow>
         <SelectionToolbar />

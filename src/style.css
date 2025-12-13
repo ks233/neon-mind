@@ -33,23 +33,7 @@
         /* 8. Emoji 字体 (防止 Emoji 变成方块) */
         "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
     /* 浅色模式变量 */
-    --bg-color: #ffffff;
-    --node-bg: #ffffff;
-    --text-color: #2c3e50;
-    --border-color: #e5e5e5;
-    --grid-color: #e5e5e5;
-    --line-color: #b1b1b7;
-    --handle-color: #555;
 
-    /* 禁用 iOS/Mac 橡皮筋滚动 */
-    overscroll-behavior: none;
-
-    /* 连字符 */
-    font-variant-ligatures: common-ligatures;
-}
-
-/* 2. 深色模式覆盖 */
-html.dark {
     --bg-color: #1f2022;
     --node-bg: #1c2127;
     --text-color: #ececec;
@@ -58,7 +42,14 @@ html.dark {
     --line-color: #666;
     --mindmap-line-color: #177ddc;
     --handle-color: #444444;
+
+    /* 禁用 iOS/Mac 橡皮筋滚动 */
+    overscroll-behavior: none;
+
+    /* 连字符 */
+    font-variant-ligatures: common-ligatures;
 }
+
 
 /* 3. 全局重置 (Canvas Scaler: Expand) */
 html,

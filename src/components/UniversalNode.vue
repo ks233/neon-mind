@@ -353,17 +353,6 @@ const isImage = computed(() => props.data.logicNode.contentType === 'image')
     box-shadow: 0 0 0 5px var(--border-color);
 }
 
-/* 根节点样式 */
-.universal-node.is-root {
-    /* background: #e6f7ff; */
-    /* border-color: #91d5ff; */
-}
-
-.dark .universal-node.is-root {
-    /* background: #111d2c; */
-    /* border-color: #177ddc; */
-}
-
 .universal-node.is-carried {
     opacity: 0.5;
     /* 半透明 */

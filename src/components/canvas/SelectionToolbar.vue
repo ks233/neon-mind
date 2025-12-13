@@ -152,7 +152,7 @@ function setScale(scale: number) {
     background-color: rgba(0, 0, 0, 0.7);
 }
 
-:global(.dark) .selection-toolbar {
+.selection-toolbar {
     background-color: rgba(30, 30, 30, 0.95);
 }
 
