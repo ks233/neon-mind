@@ -15,6 +15,15 @@ import type { MarkdownPayload } from '@/types/model'
 import { convertFileSrc } from '@tauri-apps/api/core'
 import { openUrl } from '@tauri-apps/plugin-opener'
 
+// [!code focus:3] 1. 引入 highlight.js 核心和样式
+import hljs from 'highlight.js'
+// 你可以在 node_modules/highlight.js/styles/ 下挑选喜欢的颜色主题，例如 github.css, atom-one-dark.css 等
+import { useCanvasStore } from '@/stores/canvasStore'
+import 'highlight.js/styles/atom-one-dark.css'
+import taskLists from 'markdown-it-task-lists'
+import { autoSpaceExtension } from './autoSpaceExt'
+import { smartWordExtension } from './smartWordExt'
+
 const props = defineProps<{
     data: MarkdownPayload
     fixedSize?: boolean
@@ -27,14 +36,6 @@ const emit = defineEmits<{
     (e: 'blur'): void
     (e: 'command', key: string): void
 }>()
-// [!code focus:3] 1. 引入 highlight.js 核心和样式
-import hljs from 'highlight.js'
-// 你可以在 node_modules/highlight.js/styles/ 下挑选喜欢的颜色主题，例如 github.css, atom-one-dark.css 等
-import { useCanvasStore } from '@/stores/canvasStore'
-import 'highlight.js/styles/atom-one-dark.css'
-import taskLists from 'markdown-it-task-lists'
-import { autoSpaceExtension } from './autoSpaceExt'
-import { smartWordExtension } from './smartWordExt'
 
 const projectStore = useProjectStore()
 
@@ -534,7 +535,7 @@ function onInputBlur(e: FocusEvent) {
     box-sizing: border-box;
     height: 100%;
     width: 100%;
-    padding: 6px 8px;
+    padding: 8px 8px;
     display: flex;
     flex-direction: column;
 }

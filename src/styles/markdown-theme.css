@@ -2,7 +2,8 @@
     /* === 基础排版 === */
     --md-font-family: var(--default-font-family);
     --md-font-size: 14px;
-    --md-line-height: 1.6;
+    /* 不能直接写 20px，因为其它标题的大小不是 14px */
+    --md-line-height: calc(20 / 14); 
     --md-color: var(--text-color);
     /* 继承自全局 */
 
