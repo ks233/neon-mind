@@ -177,6 +177,7 @@ function onNodeDrag(e: NodeDragEvent) {
     // 只处理单选拖拽，且拖拽的是思维导图节点
     const draggedNode = e.node
     const draggedId = draggedNode.id
+    const isRoot = canvasStore.isRoot(draggedId);
 
     const logicNode = canvasStore.model.nodes[draggedId]
 
@@ -228,9 +229,12 @@ function onNodeDrag(e: NodeDragEvent) {
 
     if (carriedNodes.value.length > 0) {
         // 1. 计算增量 (Delta)
-        const dx = draggedNode.position.x - dragStartPos.value.x;
-        const dy = draggedNode.position.y - dragStartPos.value.y;
-
+        let dx = draggedNode.position.x - dragStartPos.value.x;
+        let dy = draggedNode.position.y - dragStartPos.value.y;
+        if(isRoot){
+            dx = snapToGrid(dx)
+            dy = snapToGrid(dy)
+        }
         // 2. 更新所有子孙节点位置
         // 直接修改 GraphNode 的 position，Vue Flow 会自动高效渲染
         carriedNodes.value.forEach(child => {
@@ -242,10 +246,13 @@ function onNodeDrag(e: NodeDragEvent) {
         lastDragPos.value = { ...e.node.position };
     }
     e.nodes.forEach(node => {
-        // node.position.x = snapToGrid(node.position.x);
-        // node.position.y = snapToGrid(node.position.y);
-        node.position.x = node.position.x;
-        node.position.y = node.position.y;
+        if(isRoot){
+            node.position.x = snapToGrid(node.position.x);
+            node.position.y = snapToGrid(node.position.y);
+        }else{
+            node.position.x = node.position.x;
+            node.position.y = node.position.y;
+        }
     })
 
 }
