@@ -125,8 +125,8 @@ function measureNodes(node: LayoutNode) {
         }
     }
     // 向上取整吸附网格
-    node.width = ceilToGrid(rawWidth);
-    node.height = ceilToGrid(rawHeight);
+    node.width = rawWidth;
+    node.height = rawHeight;
 
     // B. 计算子树包围盒 (Area Height)
     if (node.children.length === 0) {
@@ -207,7 +207,7 @@ function generateElements(root: LayoutNode, logicRoot: LogicNode) {
         // 现在的 node.x / node.y 已经是相对于根节点的 Top-Left 坐标了
         // 直接加上全局偏移即可，不需要烧脑的中心点换算！
         const finalX = startX + node.x;
-        const finalY = ceilToGrid(startY + node.y);
+        const finalY = startY + node.y;
 
         resultNodes.push(createVisualNode(node.data, { x: finalX, y: finalY }, currentDepth, treeRootId));
 
