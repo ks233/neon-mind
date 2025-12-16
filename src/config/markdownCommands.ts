@@ -1,5 +1,3 @@
-// src/config/markdown-commands.ts
-
 import { EditorView, KeyBinding, keymap } from '@codemirror/view';
 
 /**
@@ -67,7 +65,7 @@ export const toggleStrikethrough = toggleMarkCommand('~~', '~~');
 export const toggleInlineCode = toggleMarkCommand('`', '`');
 
 
-// [!code focus:22] 定义 CodeMirror Keymap
+// 定义 CodeMirror Keymap
 // 使用 'Mod' 自动适配 Ctrl (Windows/Linux) 或 Cmd (Mac)
 export const markdownKeymap: readonly KeyBinding[] = [
     {

@@ -1,14 +1,11 @@
 // src-tauri/src/thumb_protocol.rs
 use crate::utils::{get_temp_dir, get_thumb_cache_dir};
 use fast_image_resize::images::Image;
-use fast_image_resize::{
-    pixels, CpuExtensions, IntoImageView, PixelType, ResizeAlg, ResizeOptions, Resizer,
-};
-use image::codecs::jpeg::JpegEncoder;
-use image::{ImageFormat, ImageReader};
+use fast_image_resize::{IntoImageView, ResizeAlg, ResizeOptions, Resizer};
+use image::ImageReader;
 use sha2::{Digest, Sha256};
-use std::fs::{self, File};
-use std::io::{BufWriter, Cursor};
+use std::fs::{self};
+use std::io::BufWriter;
 use std::path::{Path, PathBuf};
 use tauri::Wry;
 use tauri::{
@@ -18,9 +15,9 @@ use tauri::{
 use threadpool::ThreadPool;
 
 use image::codecs::png::PngEncoder;
-use image::{ExtendedColorType, ImageEncoder};
+use image::ImageEncoder;
 
-use std::time::Instant; // [!code focus] 引入计时器
+use std::time::Instant; // 引入计时器
 
 // 定义状态结构体 (需要在 lib.rs 中 pub 以便 manage)
 pub struct ThumbnailCacheState {
@@ -44,7 +41,7 @@ fn process_thumbnail(
         return Err(format!("Source file not found: {:?}", file_path));
     }
 
-    let start_time = Instant::now(); // [!code focus]
+    let start_time = Instant::now(); // 计时
     let path_str = file_path.to_string_lossy();
     let (orig_width, orig_height) = image::image_dimensions(&file_path)
         .map_err(|_err| format!("无法获取图片宽度: {}", path_str))?;

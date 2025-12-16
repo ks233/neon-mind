@@ -52,7 +52,7 @@ export const useCanvasStore = defineStore('canvas', () => {
     //#endregion
 
     // #region 撤消重做
-    // [!code focus] 历史栈改存 Patch 数组，而不是巨大的 JSON 字符串
+    // 历史栈改存 Patch 数组，而不是巨大的 JSON 字符串
     const historyStack = ref<HistoryEntry[]>([]);
     const futureStack = shallowRef<HistoryEntry[]>([]);
 
@@ -141,7 +141,7 @@ export const useCanvasStore = defineStore('canvas', () => {
                 type: 'default', // 默认线型
                 animated: false,
 
-                // [!code focus:5] 恢复 Handle 和 Label
+                // 恢复 Handle 和 Label
                 sourceHandle: edge.sourceHandle,
                 targetHandle: edge.targetHandle,
                 label: edge.label, // Vue Flow 会自动渲染这个 label
@@ -151,7 +151,7 @@ export const useCanvasStore = defineStore('canvas', () => {
                 labelStyle: { fill: 'var(--text-color)', fontWeight: 600, fontSize: 18 },
                 labelBgStyle: { fill: 'var(--bg-color)', fillOpacity: 0.8 },
 
-                // [!code focus:2] 样式：添加箭头
+                // 样式：添加箭头
                 markerEnd: MarkerType.ArrowClosed, // 闭合箭头
 
             });
@@ -188,7 +188,7 @@ export const useCanvasStore = defineStore('canvas', () => {
                 source: params.source,
                 target: params.target,
 
-                // [!code focus:2] 保存具体的连接桩点
+                // 保存具体的连接桩点
                 sourceHandle: params.sourceHandle ?? undefined,
                 targetHandle: params.targetHandle ?? undefined,
 
@@ -954,7 +954,7 @@ export const useCanvasStore = defineStore('canvas', () => {
     // 辅助：递归序列化，使用传入的 visualMap 获取真实坐标
     function serializeNodeTree(
         nodeId: string,
-        visualMap: Map<string, VisualSnapshot>, // [!code focus] 依赖注入
+        visualMap: Map<string, VisualSnapshot>, // 依赖注入
         visitedIds: Set<string>
     ): LogicNode | null {
         const logicNode = model.value.nodes[nodeId];
@@ -988,7 +988,7 @@ export const useCanvasStore = defineStore('canvas', () => {
      */
     async function copySelection(
         selectedIds: string[],
-        visualMap: Map<string, VisualSnapshot> // [!code focus]
+        visualMap: Map<string, VisualSnapshot>
     ) {
         if (selectedIds.length === 0) return;
         const selectedSet = new Set(selectedIds);

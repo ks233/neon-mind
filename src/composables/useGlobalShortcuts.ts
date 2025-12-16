@@ -11,7 +11,7 @@ export function useGlobalShortcuts() {
     const uiStore = useUiStore()
     const projectStore = useProjectStore()
 
-    // [!code focus:15] 全局处理 Tab 键
+    // 全局处理 Tab 键
     onKeyStroke('Tab', async (e) => {
         e.preventDefault();
         // 如果正在编辑文本，不要拦截 (由 ContentMarkdown 内部 stop 阻止冒泡)
@@ -118,7 +118,7 @@ export function useGlobalShortcuts() {
         }
     })
 
-    // [!code focus:60] === 新增：思维导图方向键导航 ===
+    // === 思维导图方向键导航 ===
     onKeyStroke(['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'], (e) => {
         // 1. 基础拦截：编辑中、组合键按下时不触发
         if (isInputActive()) return

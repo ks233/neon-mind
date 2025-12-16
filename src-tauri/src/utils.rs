@@ -1,7 +1,7 @@
 // src-tauri/src/utils.rs
 use sha2::{Digest, Sha256};
 use std::path::PathBuf;
-use tauri::{path::BaseDirectory, AppHandle, Manager};
+use tauri::{AppHandle, Manager};
 
 // 获取 App 临时目录 (Runtime Path 存放处)
 pub fn get_temp_dir(app: &AppHandle) -> PathBuf {

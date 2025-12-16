@@ -12,8 +12,7 @@ export function useClipboard() {
     const { x, y } = useMouse();
 
     const uiStore = useUiStore();
-    const { getNodes } = useVueFlow(); // [!code focus]
-    // ...
+    const { getNodes } = useVueFlow();
 
     // 辅助：生成视觉快照 Map
     function getVisualMap(): Map<string, VisualSnapshot> {
@@ -42,7 +41,7 @@ export function useClipboard() {
         const selectedIds = uiStore.getSelectedNodeIds();
         if (selectedIds.length === 0) return;
 
-        // 2. [核心] 获取视觉快照
+        // 2. 获取视觉快照
         const visualMap = getVisualMap();
 
         // 3. 调用 Store，传入数据

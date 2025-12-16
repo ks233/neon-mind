@@ -1,8 +1,4 @@
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
-#[tauri::command]
-fn greet(name: &str) -> String {
-    format!("Hello, {}! You've been greeted from Rust!", name)
-}
 
 // src-tauri/src/lib.rs
 mod thumb_protocol;
@@ -15,7 +11,6 @@ use std::fs;
 use std::path::Path;
 use std::time::Instant;
 use tauri::{AppHandle, Manager};
-use threadpool::ThreadPool;
 
 // =========================================================
 // 2. Tauri Commands (供前端调用)
@@ -141,7 +136,7 @@ async fn commit_assets(
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
-        // [!code focus:20] 1. 初始化线程池
+        // 1. 初始化线程池
         .setup(|app| {
             // 获取 CPU 核心数，设置合理的并发量 (例如核心数 * 2，或者是固定值 4)
             // 图片处理是 CPU 密集型，建议设为 num_cpus::get()

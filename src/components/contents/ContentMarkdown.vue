@@ -3,7 +3,7 @@ import MarkdownIt from 'markdown-it'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 // CodeMirror 核心
 import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirror/commands'
-import { markdown as markdownLang, markdownLanguage } from '@codemirror/lang-markdown'
+import { markdown as markdownLang } from '@codemirror/lang-markdown'
 import { languages } from '@codemirror/language-data'
 import { Compartment, EditorState } from '@codemirror/state'
 import { EditorView, keymap } from '@codemirror/view'
@@ -15,10 +15,9 @@ import type { MarkdownPayload } from '@/types/model'
 import { convertFileSrc } from '@tauri-apps/api/core'
 import { openUrl } from '@tauri-apps/plugin-opener'
 
-// [!code focus:3] 1. 引入 highlight.js 核心和样式
-import hljs from 'highlight.js'
-// 你可以在 node_modules/highlight.js/styles/ 下挑选喜欢的颜色主题，例如 github.css, atom-one-dark.css 等
+// 引入 highlight.js 核心和样式
 import { useCanvasStore } from '@/stores/canvasStore'
+import hljs from 'highlight.js'
 import 'highlight.js/styles/atom-one-dark.css'
 import taskLists from 'markdown-it-task-lists'
 import { autoSpaceExtension } from './autoSpaceExt'
@@ -71,7 +70,7 @@ const defaultImageRender = md.renderer.rules.image || function (tokens, idx, opt
 }
 
 // 配置 Markdown-it 给链接添加 nodrag 类
-// 1. 保存默认的 link_open 渲染规则
+// 保存默认的 link_open 渲染规则
 const defaultLinkRender = md.renderer.rules.link_open || function (tokens, idx, options, env, self) {
     return self.renderToken(tokens, idx, options)
 }
@@ -82,7 +81,7 @@ const defaultListItemRender = md.renderer.rules.list_item_open || function (toke
     return self.renderToken(tokens, idx, options)
 }
 
-// 2. 覆盖规则
+// 覆盖规则
 md.renderer.rules.link_open = (tokens, idx, options, env, self) => {
     const token = tokens[idx]
 
@@ -157,9 +156,9 @@ async function onContentClick(e: MouseEvent) {
     const target = e.target as HTMLElement
     const link = target.closest('a')
     if (link && link.href) {
-        // 1. 阻止 WebView 默认跳转 (非常重要！)
+        // 阻止 WebView 默认跳转 (非常重要！)
         e.preventDefault()
-        // 2. 调用 Tauri 系统 API 打开浏览器
+        // 调用 Tauri 系统 API 打开浏览器
         try {
             await openUrl(link.href)
         } catch (err) {
@@ -170,18 +169,18 @@ async function onContentClick(e: MouseEvent) {
 
 const canvasStore = useCanvasStore()
 
-// [!code focus:18] 新增：处理复选框状态变化
+// 处理复选框状态变化
 function onTaskChange(e: Event) {
     const target = e.target as HTMLInputElement
     if (target.type !== 'checkbox') return
 
     e.preventDefault() // 阻止 UI 默认变化，等待数据驱动更新
 
-    // [!code focus:12] === 核心修复：从父级 li 获取行号 ===
-    // 1. 向上寻找最近的 li 标签
+    // 从父级 li 获取行号
+    // 向上寻找最近的 li 标签
     const listItem = target.closest('li')
 
-    // 2. 获取行号 (Markdown-it 的行号通常是 0-based)
+    // 获取行号 (Markdown-it 的行号通常是 0-based)
     const lineAttr = listItem?.dataset.line
     const lineNum = lineAttr ? parseInt(lineAttr) : -1
 
@@ -191,12 +190,12 @@ function onTaskChange(e: Event) {
         return
     }
 
-    // 3. 获取当前 Markdown 内容并切换状态
+    // 获取当前 Markdown 内容并切换状态
     const currentContent = props.data.content || ''
     console.log(currentContent, lineNum, target.checked)
     const newContent = toggleTask(currentContent, lineNum, target.checked)
     console.log(newContent)
-    // 4. 更新 Store (这里假设你有这个方法)
+    // 更新 Store
     canvasStore.updateNodeContent(props.data.id, newContent)
 }
 
@@ -313,7 +312,7 @@ async function initEditor() {
                 }
             }),
             markdownKeymapExtension,
-            // 1. 注册智能分词按键映射 (优先级通常较高，因为它在后面添加)
+            // 注册智能分词按键映射 (优先级通常较高，因为它在后面添加)
             smartWordExtension,
             autoSpaceExtension,
         ]
@@ -336,12 +335,12 @@ watch(() => props.data.language, async (newLang) => {
         const langExt = await getLanguageExtension(newLang)
 
         // 判断新的模式
-        const isCode = !!newLang && newLang !== 'markdown' // [!code focus]
+        const isCode = !!newLang && newLang !== 'markdown'
 
         view.dispatch({
             effects: [
                 languageConf.reconfigure(langExt),
-                // [!code focus] 动态切换字体
+                // 动态切换字体
                 themeConf.reconfigure(isCode ? codeFontTheme : markdownFontTheme)
             ]
         })
@@ -408,7 +407,7 @@ function onKeyDownCapture(e: KeyboardEvent) {
 
 // 除非需要滚动，否则不拦截滚轮事件（允许滚轮缩放）
 function onWheel(e: WheelEvent) {
-    // 1. 找到真正滚动的容器 (CodeMirror 6 的滚动容器类名是 .cm-scroller)
+    // 找到真正滚动的容器 (CodeMirror 6 的滚动容器类名是 .cm-scroller)
     // 如果找不到，就找当前组件的根元素
     const scroller = editorRef.value?.querySelector('.cm-scroller') || editorRef.value
 
@@ -428,13 +427,8 @@ function onWheel(e: WheelEvent) {
 function onMouseDown(e: MouseEvent) {
     if (e.button === 1) {
         // === 中键点击 (Middle Click) ===
-        // 1. 阻止默认行为：防止出现浏览器原生滚动图标，防止焦点被抢走导致 blur
+        // 阻止默认行为：防止出现浏览器原生滚动图标，防止焦点被抢走导致 blur
         e.preventDefault()
-
-        // 2. 【关键】放行事件冒泡
-        // 让 Vue Flow 接收到这个 mousedown，从而启动画布平移 (Pan)
-        // 因为我们 preventDefault 了，所以编辑器不会失去焦点
-
     } else {
         // === 左键点击 (Left Click) ===
         // 拦截冒泡：我们要选中文本，不要让 Vue Flow 以为我们在拖拽节点
@@ -459,7 +453,7 @@ const highlightedCode = computed(() => {
 })
 
 
-// [!code focus:5] 处理语言修改
+// 处理语言修改
 function onLanguageChange(e: Event) {
     const target = e.target as HTMLInputElement
     // 实时更新，如果用户清空了内容，isCodeMode 会自动变为 false，输入框也会随即消失
@@ -671,14 +665,8 @@ function onInputBlur(e: FocusEvent) {
     :deep(img) {
         display: block;
         pointer-events: none;
-
-        // [!code focus:3] 核心修改
-        // 限制最大宽高不超过父容器，防止撑破布局
         max-width: 100%;
         max-height: 300px;
-
-        /* 配合 object-fit (在 template 的 style 中设置) 使用，
-     这能保证图片既不超过容器，又能按需填充(cover)或完整显示(contain) */
     }
 
     :deep(table) {
@@ -741,7 +729,7 @@ function onInputBlur(e: FocusEvent) {
         // 兼容性更好的断行写法
     }
 
-    // Todo
+    // --- Todo ---
     // 1. 针对包含任务列表的 ul (插件通常会添加 contains-task-list 类，如果没有，ul 也会生效)
 
     :deep(.contains-task-list),

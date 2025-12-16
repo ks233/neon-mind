@@ -1,12 +1,17 @@
 <script setup lang="ts">
 import { useMindMapKeyboard } from '@/composables/useMindMapShortcuts'
+import { NODE_CONSTANTS } from '@/config/layoutConfig'
 import { useCanvasStore } from '@/stores/canvasStore'
+import { useUiStore } from '@/stores/uiStore'
+import { ImagePayload, LogicNode, MarkdownPayload } from '@/types/model'
+import { resolveContentComponent } from '@/utils/contentResolver'
+import { snapToGrid } from '@/utils/grid'
 import { GraphNode, Handle, Position, useNode, useVueFlow, type NodeProps } from '@vue-flow/core'
 import { NodeResizer, OnResize, OnResizeStart } from '@vue-flow/node-resizer'
 import '@vue-flow/node-resizer/dist/style.css'
 import { useResizeObserver } from '@vueuse/core'
+import flourite from 'flourite'
 import { computed, ref, toRef } from 'vue'
-import { NODE_CONSTANTS } from '@/config/layoutConfig'
 
 // 定义 Props
 interface NodeData {
@@ -15,25 +20,21 @@ interface NodeData {
     fixedSize?: boolean // 标记是否已被手动调整过大小
 }
 const props = defineProps<NodeProps<NodeData>>()
-const showDebug = ref(false)
-const isDetaching = computed(() => uiStore.dragDetachId === id && uiStore.dragIntent === null)
 
+// 初始化 composables
 const { id, node } = useNode()
 const canvasStore = useCanvasStore()
 const uiStore = useUiStore()
 
-import { useUiStore } from '@/stores/uiStore'
-import { ImagePayload, LogicNode, MarkdownPayload } from '@/types/model'
-import { resolveContentComponent } from '@/utils/contentResolver'
-import { snapToGrid } from '@/utils/grid'
+// 元素引用，用于测量尺寸
+const containerRef = ref<HTMLElement | null>(null)
 
-// === 状态管理 ===
+// 状态
+const showDebug = ref(false)
 const isEditing = computed({
-    // 读取：判断全局的"令牌"是不是在自己手里
     get() {
         return uiStore.editingNodeId === id
     },
-    // 写入：修改本地变量时，自动代理到 Store Action
     set(val: boolean) {
         if (val) {
             uiStore.startEditing(id)
@@ -46,24 +47,24 @@ const isEditing = computed({
         }
     }
 })
-const containerRef = ref<HTMLElement | null>(null) // 用于测量尺寸
-
-// 计算当前是否被高亮 (拖拽反馈)
+// 拖拽反馈
+const isDetaching = computed(() => uiStore.dragDetachId === id && uiStore.dragIntent === null)
 const isTarget = computed(() => uiStore.dragTargetId === id)
 const intent = computed(() => isTarget.value ? uiStore.dragIntent : null)
 const isCarried = computed(() => uiStore.carriedNodeIds.has(id))
 
-
 // 计算是否固定尺寸
 const isFixedSize = computed(() => props.data.fixedSize || node.resizing)
-
-// 注入快捷键
 const selectedRef = toRef(props, 'selected')
-useMindMapKeyboard(id, selectedRef, isEditing)
 
+// 内容类型（Markdown、图片、链接）
 const ContentComponent = computed(() =>
     resolveContentComponent(props.data.logicNode.contentType)
 )
+
+// 注入快捷键（Alt+上下）
+useMindMapKeyboard(id, selectedRef, isEditing)
+
 
 // === 自动尺寸上报 ===
 useResizeObserver(containerRef, (entries) => {
@@ -77,28 +78,27 @@ useResizeObserver(containerRef, (entries) => {
     }
 })
 
-// === 交互逻辑 ===
-
-// 1. 双击进入编辑
+// 双击进入编辑
 function onDblClick(evt: MouseEvent) {
     evt.stopPropagation()
     isEditing.value = true
 }
 
+// 内容节点更新
 function handleUpdate(type: 'content' | 'url' | 'ratio' | 'language', val: any) {
     switch (type) {
         case 'content':
             canvasStore.updateNodeContent(id, val);
             break;
         case 'url':
-            // 这里可以触发一个异步 Action 去爬取 og:image
             canvasStore.updateNodeLink(id, val);
             break;
         case 'ratio':
             // 图片加载完成后更新比例，用于排版
             canvasStore.updateNodeData(id, { ratio: val });
             break;
-        case 'language': // [!code focus]
+        case 'language':
+            // ContentMarkdown 代码模式语言变更
             canvasStore.updateNodeData(id, { language: val });
             break;
     }
@@ -159,7 +159,7 @@ function handleMouseDown(e: MouseEvent) {
         return;
     }
 
-    // 2. [核心修复] 如果别人正在编辑，立刻帮他关闭！
+    // 2. 如果别人正在编辑，立刻帮他关闭！
     // 因为我们下面要 preventDefault，浏览器不会自动 blur 那个节点，所以我们要手动通过 Store 关闭它
     if (uiStore.editingNodeId && uiStore.editingNodeId !== id) {
         uiStore.stopEditing();
@@ -206,7 +206,6 @@ const isCode = computed(() =>
     props.data.logicNode.language !== '')
 
 //#region 右键菜单
-
 const contextMenu = ref({
     show: false,
     x: 0,
@@ -233,7 +232,6 @@ function closeContextMenu() {
     contextMenu.value.show = false;
 }
 
-import flourite from 'flourite';
 
 // 修改 toggleCodeMode 函数
 async function toggleCodeMode() {
@@ -272,7 +270,6 @@ async function toggleCodeMode() {
     closeContextMenu();
 }
 //#endregion
-
 
 </script>
 
@@ -351,6 +348,7 @@ async function toggleCodeMode() {
             </template>
             <!-- {{ data.logicNode.width }} -->
         </div>
+        <!-- 右键菜单 -->
         <Teleport to="body">
             <div v-if="contextMenu.show" class="context-menu-overlay" @click="closeContextMenu"
                 @contextmenu.prevent="closeContextMenu">

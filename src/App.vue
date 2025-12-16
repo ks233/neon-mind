@@ -2,7 +2,7 @@
 import { Background } from '@vue-flow/background'
 import type { Connection, EdgeChange, EdgeMouseEvent, GraphEdge, GraphNode, NodeDragEvent, NodeTypesObject, Rect, XYPosition } from '@vue-flow/core'
 import { SelectionMode, VueFlow, useVueFlow } from '@vue-flow/core'
-import { computed, markRaw, ref } from 'vue'
+import { markRaw, ref } from 'vue'
 
 // 必须引入 Vue Flow 的默认样式，否则节点会乱飞
 import '@vue-flow/controls/dist/style.css'
@@ -15,26 +15,20 @@ import SelectionToolbar from '@/components/canvas/SelectionToolbar.vue'
 
 import { useCanvasStore } from '@/stores/canvasStore'
 
-import { useMouse } from '@vueuse/core'
-
 import { snapToGrid, snapToGridXY } from '@/utils/grid'
+import { useClipboard } from './composables/useClipboard'
 import { useGlobalInteractions } from './composables/useGlobalInteractions'
 import { useGlobalShortcuts } from './composables/useGlobalShortcuts'
 import { NODE_CONSTANTS } from './config/layoutConfig'
 import { useProjectStore } from './stores/projectStore'
 import { useUiStore } from './stores/uiStore'
 import { LogicNode } from './types/model'
-import { useClipboard } from './composables/useClipboard'
 
 // #region 初始化
-
-const { x: rawMouseX, y: rawMouseY } = useMouse()
 
 // 自定义节点
 const nodeTypes: NodeTypesObject = {
     origin: markRaw(OriginNode as any),
-    markdown: markRaw(UniversalNode),
-    'mindmap': markRaw(UniversalNode),
     'Universal': markRaw(UniversalNode),
 }
 
@@ -52,37 +46,12 @@ const { screenToFlowCoordinate, addEdges, updateEdge } = useVueFlow()
 
 const gridSize = ref<number>(20)
 const DETACH_DISTANCE = 60;
-// #endregion
 
-// #region 创建节点
-
-async function onDblClick(event: MouseEvent) {
-    const target = event.target as Element
-    const isNode = target.closest('.vue-flow__node')
-    const isEdge = target.closest('.vue-flow__edge')
-
-    // 如果点到了节点或者线，直接返回，不要生成新节点
-    if (isNode || isEdge) {
-        return
-    }
-
-    // 只有点在空地上，才执行生成逻辑
-    const { x, y } = screenToFlowCoordinate({
-        x: event.clientX,
-        y: event.clientY,
-    })
-
-    const rawX = x - 0 // 减去宽度一半
-    const rawY = y - 0  // 减去高度一半
-
-    const finalX = snapToGrid(rawX, gridSize.value)
-    const finalY = snapToGrid(rawY, gridSize.value)
-
-    const newId = await canvasStore.addMindMapRoot(finalX, finalY)
-    uiStore.startEditing(newId)
-    uiStore.selectNodeById(newId)
-    // 阻止默认行为（防止选中文字等）
-    event.preventDefault()
+// 初始化数据单例
+function onPaneReadyHandler(instance: any) {
+    console.log('VueFlow Pane Ready')
+    uiStore.setFlowInstance(instance)
+    projectStore.newProject()
 }
 
 // #endregion
@@ -107,7 +76,6 @@ function onEdgesChange(changes: EdgeChange[]) {
 // #endregion
 
 // #region 更新连线
-
 const isUpdateSuccessful = ref(false)
 
 function onEdgeUpdateStart(edge: EdgeMouseEvent) {
@@ -149,17 +117,14 @@ const carriedDragStartPos = ref<Record<string, XYPosition>>({})
 function onNodeDragStart(e: NodeDragEvent) {
     const node = e.node;
     dragStartPos.value = { ...node.position }
-    // console.log(currentDraggingNode)
     const logicNode = canvasStore.model.nodes[node.id];
     if (logicNode && (logicNode.structure === 'root' || logicNode.structure === 'node')) {
-
-        // 3. 查找所有后代 ID
+        // 查找所有后代 ID
         const descendantIds = e.nodes.flatMap(node => canvasStore.getDescendantIds(node.id));
-
-        // 4. 设置 UI 状态 (变透明)
+        // 设置 UI 状态 (变透明)
         uiStore.carriedNodeIds = new Set(descendantIds);
 
-        // 5. [性能优化] 预先查找并缓存这些视图节点实例
+        // [性能优化] 预先查找并缓存这些视图节点实例
         // 这样在 onNodeDrag 高频触发时，不用每次都去遍历查找
         // e.viewNodes 或者 store.vueNodes 都可以，建议直接用 VueFlow 的内部实例
         carriedNodes.value = uiStore.getGraphNodes(descendantIds)
@@ -169,12 +134,11 @@ function onNodeDragStart(e: NodeDragEvent) {
     }
 }
 
-// 1. 拖拽中 (Update Loop)
+// 拖拽时，跟随鼠标的碰撞体大小，用于检测意图（上方、下方、子节点）
 const PROXY_SIZE = 30;
 
-
+// 找到和碰撞体相交的另一个节点，通过鼠标高度判断拖拽意图
 function onNodeDrag(e: NodeDragEvent) {
-    // 只处理单选拖拽，且拖拽的是思维导图节点
     const draggedNode = e.node
     const draggedId = draggedNode.id
     const isRoot = canvasStore.isRoot(draggedId);
@@ -218,7 +182,7 @@ function onNodeDrag(e: NodeDragEvent) {
         // 欧几里得距离
         const distance = Math.sqrt(dx * dx + dy * dy)
 
-        // 3. 判断阈值
+        // 判断阈值
         if (distance > DETACH_DISTANCE) {
             uiStore.dragDetachId = draggedId
         } else {
@@ -228,28 +192,28 @@ function onNodeDrag(e: NodeDragEvent) {
     // 移动显示位置
 
     if (carriedNodes.value.length > 0) {
-        // 1. 计算增量 (Delta)
+        // 计算增量 (Delta)
         let dx = draggedNode.position.x - dragStartPos.value.x;
         let dy = draggedNode.position.y - dragStartPos.value.y;
-        if(isRoot){
+        if (isRoot) {
             dx = snapToGrid(dx)
             dy = snapToGrid(dy)
         }
-        // 2. 更新所有子孙节点位置
+        // 更新所有子孙节点位置
         // 直接修改 GraphNode 的 position，Vue Flow 会自动高效渲染
         carriedNodes.value.forEach(child => {
             child.position.x = carriedDragStartPos.value[child.id].x + dx
             child.position.y = carriedDragStartPos.value[child.id].y + dy
         });
 
-        // 3. 更新 lastPos 为当前位置，为下一帧做准备
+        // 更新 lastPos 为当前位置，为下一帧做准备
         lastDragPos.value = { ...e.node.position };
     }
     e.nodes.forEach(node => {
-        if(isRoot){
+        if (isRoot) {
             node.position.x = snapToGrid(node.position.x);
             node.position.y = snapToGrid(node.position.y);
-        }else{
+        } else {
             node.position.x = node.position.x;
             node.position.y = node.position.y;
         }
@@ -257,7 +221,6 @@ function onNodeDrag(e: NodeDragEvent) {
 
 }
 
-// 2. 拖拽结束 (OnMouseUp)
 function onNodeDragStop(e: NodeDragEvent) {
     const draggedNode = e.node
     const newPositionsRecord: Record<string, XYPosition> = {};
@@ -278,12 +241,12 @@ function onNodeDragStop(e: NodeDragEvent) {
     })
 
     if (carriedNodes.value.length > 0) {
-        // 1. 将子孙节点的最终位置同步回 Store Model
+        // 将子孙节点的最终位置同步回 Store Model
         // 必须同步，否则下次 syncModelToView 会把它们弹回去
         carriedNodes.value.forEach(child => {
             newPositionsRecord[child.id] = child.position;
         });
-        // 2. 清理状态
+        // 清理状态
         uiStore.carriedNodeIds.clear();
         carriedNodes.value = [];
     }
@@ -351,42 +314,33 @@ function onEdgeDoubleClick(e: EdgeMouseEvent) {
     }
 }
 
-function onPaneReadyHandler(instance: any) {
-    console.log('VueFlow Pane Ready')
-    uiStore.setFlowInstance(instance)
-    projectStore.newProject()
-}
-
-// 原有的背景点击 (用于退出编辑)
+// 背景点击 (用于退出编辑)
 function onPaneClick(event: any) {
-    // [!code focus:4] 只有左键点击背景才退出编辑
-    // Vue Flow 的 onPaneClick 有时会包含原始事件，做一个防御性检查
-    // 如果是中键拖拽产生的 click，这里通常不会触发，但为了保险起见：
     if (uiStore.editingNodeId) {
         uiStore.stopEditing()
     }
 }
 
-//#region 双击创建
+//#region 双击创建节点（带拖拽）
 
 // === 双击拖拽创建状态机 ===
 const DOUBLE_CLICK_DELAY = 300;
-const CLICK_DISTANCE_THRESHOLD = 10; // [!code focus] 新增：防抖动距离阈值
+const CLICK_DISTANCE_THRESHOLD = 10; // 防抖动距离阈值
 const DRAG_THRESHOLD = 5;
 
 let lastClickTime = 0;
-let lastClickPos = { x: 0, y: 0 }; // [!code focus] 新增：记录上次点击位置
+let lastClickPos = { x: 0, y: 0 }; // 记录上次点击位置
 let potentialDoubleClick = false;
 const isCreatingDrag = ref(false);
 const creatingStartPos = ref<XYPosition | null>(null);
 const creatingNodeId = ref<string | null>(null);
 
-// [!code focus:45] 1. 鼠标按下 (Capture阶段): 处理双击创建、排除节点干扰
+// 鼠标按下 (Capture阶段): 处理双击创建、排除节点干扰
 function onPanePointerDown(event: PointerEvent) {
     // A. 过滤：只响应左键
     if (event.button !== 0) return;
 
-    // B. [关键修复] 过滤：如果点到了节点、连线、面板，直接忽略
+    // B. 过滤：如果点到了节点、连线、面板，直接忽略
     // 这样就不会拦截 节点拖拽、文本编辑、连线操作 了
     const target = event.target as Element;
     if (target.closest('.vue-flow__node') || target.closest('.vue-flow__edge') || target.closest('.vue-flow__panel')) {
@@ -409,14 +363,13 @@ function onPanePointerDown(event: PointerEvent) {
             y: event.clientY
         }));
 
-        // [关键修复] 阻止默认行为 -> 防止触发 Vue Flow 的"蓝色框选"
+        // 阻止默认行为 -> 防止触发 Vue Flow 的"蓝色框选"
         event.preventDefault();
         event.stopPropagation();
         const el = event.target as Element;
         if (el.setPointerCapture) {
             el.setPointerCapture(event.pointerId);
         }
-        // 注意：这里不需要 stopPropagation，因为 preventDefault 已经足够阻止框选
     } else {
         // 第一次点击，记录状态
         lastClickTime = now;
@@ -428,7 +381,7 @@ function onPanePointerDown(event: PointerEvent) {
     }
 }
 
-// 2. 鼠标移动: 处理拖拽大小
+// 鼠标移动: 处理拖拽大小
 function onPanePointerMove(event: PointerEvent) {
     if (!potentialDoubleClick || !creatingStartPos.value) return;
 
@@ -447,15 +400,15 @@ function onPanePointerMove(event: PointerEvent) {
         creatingNodeId.value = canvasStore.addMindMapRoot(creatingStartPos.value.x, creatingStartPos.value.y);
     }
 
-    // B. [关键修复] 实时计算尺寸 (支持四个方向拖拽)
+    // B. 实时计算尺寸 (支持四个方向拖拽)
     if (isCreatingDrag.value && creatingNodeId.value) {
-        // 1. 宽度/高度取绝对值，并限制最小尺寸
+        // 宽度/高度取绝对值，并限制最小尺寸
         const rawWidth = snapToGrid(Math.abs(dx));
         const rawHeight = snapToGrid(Math.abs(dy));
         const width = Math.max(rawWidth, NODE_CONSTANTS.MIN_WIDTH);
         const height = Math.max(rawHeight, NODE_CONSTANTS.MIN_HEIGHT);
 
-        // 2. 计算左上角坐标 (x, y)
+        // 计算左上角坐标 (x, y)
         // 逻辑：如果往左拖 (dx < 0)，x 应该是 (起点 - 宽度)；否则 x 是起点
         // 这样起点就变成了"锚点"，向左拉会向左延伸，向右拉会向右延伸
         let realX = creatingStartPos.value.x;
@@ -468,7 +421,7 @@ function onPanePointerMove(event: PointerEvent) {
     }
 }
 
-// 3. 鼠标松开: 结算
+// 鼠标松开: 结算
 function onPanePointerUp(event: PointerEvent) {
     if (potentialDoubleClick) {
         if (isCreatingDrag.value) {
@@ -509,12 +462,9 @@ function onPanePointerLeave() {
 }
 //#endregion
 
-
+// 防止中键 pan 失焦，导致节点退出编辑模式
 function onAppMouseDown(e: MouseEvent) {
-    // 如果是中键 (Button 1)
     if (e.button === 1) {
-        // [关键修复] 不要用 .capture，让 Vue Flow 先响应 Pan，然后我们在冒泡阶段拦截默认行为
-        // 这样 d3-zoom 已经启动了，但浏览器不会把焦点移到 body，从而保持编辑器聚焦
         e.preventDefault();
     }
 }
@@ -596,24 +546,20 @@ function onAppMouseDown(e: MouseEvent) {
     /* 确保在最上层 */
 
     background: rgba(0, 0, 0, 0.7);
-    /* 半透明黑底 */
     color: #00ff00;
-    /* 黑客绿，显眼 */
 
     padding: 8px 12px;
     border-radius: 6px;
-    /* 等宽字体 */
     font-size: 12px;
     line-height: 1.5;
 
-    /* 关键：鼠标穿透 */
     /* 防止挡住画布的左下角操作，让鼠标可以直接穿过去拖拽画布 */
     pointer-events: none;
 
     /* 防止文本换行 */
     white-space: nowrap;
+    /* 毛玻璃效果 */
     backdrop-filter: blur(4px);
-    /* 毛玻璃效果 (可选) */
 }
 
 .debug-row {

@@ -4,14 +4,14 @@ import { useCanvasStore } from '@/stores/canvasStore'
 
 export function useMindMapKeyboard(
   nodeId: string, 
-  selected: Ref<boolean>, // [!code focus] 新增参数
+  selected: Ref<boolean>,
   isEditing: Ref<boolean>
 ) {
   const store = useCanvasStore()
 
-  // 3. Alt + Arrows: 调整顺序
+  // Alt + Arrows: 调整顺序
   onKeyStroke(['ArrowUp', 'ArrowDown'], (e) => {
-    if (!selected.value) return // [!code focus]
+    if (!selected.value) return
     
     if (e.altKey) {
         e.preventDefault()
@@ -20,9 +20,9 @@ export function useMindMapKeyboard(
     }
   })
 
-  // 4. Space: 进入编辑
+  // Space: 进入编辑
   onKeyStroke(' ', (e) => {
-    if (!selected.value) return // [!code focus]
+    if (!selected.value) return
     
     if (!isEditing.value) {
         e.preventDefault()

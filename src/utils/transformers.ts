@@ -28,7 +28,7 @@ export function createVisualNode(
             depth: depth ?? 0,
             rootId: rootId ?? logic.id,
         },
-        // [!code focus] 应用修改后的样式逻辑
+        // 应用修改后的样式逻辑
         style: sizeStyle,
         class: logic.class ?? 'theme-default'
     };

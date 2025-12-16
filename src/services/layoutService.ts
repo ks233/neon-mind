@@ -254,7 +254,7 @@ export interface NodeGeometry {
  */
 export function getTreeBounds(
     rootId: string,
-    geometryMap: Map<string, NodeGeometry> // [!code focus] 改为传入 Map
+    geometryMap: Map<string, NodeGeometry>
 ) {
     const root = geometryMap.get(rootId);
     if (!root) return null;
@@ -269,7 +269,7 @@ export function getTreeBounds(
 
     while (queue.length > 0) {
         const id = queue.shift()!;
-        const node = geometryMap.get(id); // [!code focus] 从 Map 获取真实位置
+        const node = geometryMap.get(id);
         if (node) {
             memberIds.push(id);
 
@@ -346,13 +346,13 @@ export function calculateAlignLayout(
  */
 export function calculatePackLayout(
     targetIds: string[],
-    geometryMap: Map<string, NodeGeometry> // [!code focus] 输入改为 Geometry Map
+    geometryMap: Map<string, NodeGeometry> // 输入改为 Geometry Map
 ) {
     const GAP = 20;
     const updates: Record<string, { x: number, y: number }> = {};
 
     const boxes = targetIds.map(id => {
-        // [!code focus] 传入 geometryMap
+        // 传入 geometryMap
         const bounds = getTreeBounds(id, geometryMap);
         if (!bounds) return null;
 
@@ -383,7 +383,7 @@ export function calculatePackLayout(
         box.memberIds.forEach((memberId: string) => {
             const member = geometryMap.get(memberId);
             if (member) {
-                // [!code focus] 返回新的绝对坐标
+                // 返回新的绝对坐标
                 updates[memberId] = {
                     x: member.x + dx,
                     y: member.y + dy

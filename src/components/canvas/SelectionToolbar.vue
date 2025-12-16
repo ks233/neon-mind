@@ -25,7 +25,7 @@ const scaleOptions = [
     { label: '4x', value: 4 },
 ]
 
-// 1. 获取选中的节点数组 (Reactive)
+// 获取选中的节点数组 (Reactive)
 
 // === Actions (保持不变) ===
 const uiStore = useUiStore()
@@ -37,7 +37,7 @@ function setAutoSize() {
 }
 
 function setFixedSize() {
-    // 1. 建立一个"ID -> 真实尺寸"的查找表
+    // 建立一个"ID -> 真实尺寸"的查找表
     // 因为 store.updateNodesBatch 的回调里只能拿到 LogicNode (数据)，拿不到 VueFlow 的渲染尺寸
     const currentDimensions = new Map<string, { w: number, h: number }>()
     const selectedNodes = uiStore.getSelectedNodes()
@@ -50,7 +50,7 @@ function setFixedSize() {
     })
 
     const selectedIds = uiStore.getSelectedNodeIds()
-    // 2. 批量更新
+    // 批量更新
     store.updateNodesBatch(selectedIds, (node) => {
         node.fixedSize = true;
 
@@ -72,7 +72,7 @@ function setFixedSize() {
 function setTheme(themeClass: string) {
     const selectedIds = uiStore.getSelectedNodeIds()
     store.updateNodesBatch(selectedIds, (node) => {
-        // 1. 设置类名
+        // 设置类名
         node.class = themeClass;
     });
 }
@@ -194,11 +194,8 @@ button:hover {
     padding: 0;
     cursor: pointer;
 
-    /* [!code focus:6] 核心修改：使用 CSS 变量 */
-    /* 因为按钮上挂载了 t.class (如 .theme-red)，所以这里的变量会自动解析为红色 */
     background-color: var(--node-bg);
     border: 2px solid var(--border-color);
-    /* 使用主题定义的边框色 */
 
     transition: transform 0.2s, border-color 0.2s;
 }
