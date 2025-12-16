@@ -250,14 +250,8 @@ async function toggleCodeMode() {
         // 只有内容不为空时才检测，否则默认 javascript
         if (content.trim()) {
             try {
-                const result = flourite(content);
-                console.log(result)
-                // highlightAuto 会尝试匹配所有已注册的语言，返回相关度最高的一个
-                // const result = hljs.highlightAuto(content, COMMON_LANGUAGES);
-                // 如果检测出的 relevance 太低(可选)，或者没检测出来，回退到 plaintext 或 javascript
+                const result = flourite(content); // 自动检测语言
                 targetLanguage = result.language.toLowerCase() || 'javascript';
-
-                // console.log(`Auto-detected language: ${targetLanguage} (relevance: ${result.relevance})`);
             } catch (e) {
                 console.warn('Language detection failed:', e);
                 targetLanguage = 'javascript';
@@ -376,7 +370,7 @@ async function toggleCodeMode() {
     </div>
 </template>
 
-<style scoped>
+<style lang="scss" scoped>
 .universal-node {
     background: var(--node-bg);
     border: 2px solid var(--border-color);
@@ -389,53 +383,86 @@ async function toggleCodeMode() {
     overflow: hidden;
     box-sizing: border-box;
     transition: box-shadow 0.2s, border-color 0.1s, background-color 0.1s, opacity 0.2s;
-}
 
-/* === 模式 A: 自动大小 === */
-.universal-node.auto-size {
-    width: fit-content;
-    height: fit-content;
-    min-width: 100px;
-    min-height: 40px;
-    max-width: var(--converted-max-width);
-    /* 限制最大宽度，超过自动换行 */
-}
+    &.auto-size {
+        width: fit-content;
+        height: fit-content;
+        min-width: 100px;
+        min-height: 40px;
+        max-width: var(--converted-max-width); // 限制最大宽度，超过自动换行
+    }
 
-.content-wrapper.is-image {
-    padding: 0;
-    border-radius: 0;
-}
+    &.is-image {
+        padding: 0;
+        border-radius: 0;
+    }
 
-.universal-node.is-image {
-    padding: 0;
-    border-radius: 0;
-}
+    &.is-code.auto-size {
+        min-height: 60px;
+        max-width: none;
+    }
 
-.universal-node.is-code.auto-size {
-    min-height: 60px;
-    max-width: none;
-}
+    &.is-image.auto-size {
+        min-width: var(--converted-max-width);
+    }
 
-.universal-node.is-image.auto-size {
-    min-width: var(--converted-max-width);
-}
+    &.dragging {
+        opacity: 0.3;
+    }
 
-/* === 模式 B: 固定大小 === */
-.universal-node.fixed-size {
-    /* 宽高由 Vue Flow style 控制，这里强制填满 */
-    width: 100%;
-    height: 100%;
-}
+    &.is-detaching {
+        // border-color: #18ffcd !important;
+        border-style: dashed !important;
+        box-shadow: 0 0 10px 0px var(--border-color) !important;
+        opacity: 1;
+    }
 
-.universal-node.dragging {
-    opacity: 0.3;
-}
+    &.fixed-size {
+        // 宽高由 Vue Flow style 控制，这里强制填满
+        width: 100%;
+        height: 100%;
+    }
 
-.universal-node.is-detaching {
-    /* border-color: #18ffcd !important; */
-    border-style: dashed !important;
-    box-shadow: 0 0 10px 0px var(--border-color) !important;
-    opacity: 1;
+    &.selected {
+        box-shadow: 0 0 0 3px var(--border-color);
+    }
+
+    &.is-editing {
+        box-shadow: 0 0 0 5px var(--border-color);
+    }
+
+    &.is-carried {
+        opacity: 0.5; // 半透明
+        pointer-events: none; // 拖拽父节点时，禁止子节点响应鼠标，防误触
+        transition: opacity 0.2s; // 增加一点渐变动效
+    }
+
+    &::after {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        pointer-events: none; // 鼠标穿透
+        border: 0 solid transparent; // 默认无边框
+        transition: border-color 0.1s, box-shadow 0.1s;
+        z-index: 100;
+        border-radius: inherit; // 跟随圆角
+    }
+
+    // 拖拽反馈样式
+    &.drag-over-child::after {
+        box-shadow: inset -5px 0px var(--border-color);
+    }
+
+    &.drag-over-above::after {
+        box-shadow: inset 0px 6px 0px var(--border-color);
+    }
+
+    &.drag-over-below::after {
+        box-shadow: inset 0px -6px 0px var(--border-color);
+    }
 }
 
 .content-wrapper {
@@ -445,160 +472,95 @@ async function toggleCodeMode() {
     min-height: 24px;
     padding: 0;
     overflow: hidden;
+
+    &.is-image {
+        padding: 0;
+        border-radius: 0;
+    }
 }
 
-/* 选中状态 */
-.universal-node.selected {
-    /* border-color: #1890ff; */
-    box-shadow: 0 0 0 3px var(--border-color);
-}
-
-.universal-node.is-editing {
-    /* border-color: #1890ff; */
-    box-shadow: 0 0 0 5px var(--border-color);
-}
-
-.universal-node.is-carried {
-    opacity: 0.5;
-    /* 半透明 */
-    pointer-events: none;
-    /* [可选] 拖拽父节点时，禁止子节点响应鼠标，防误触 */
-    transition: opacity 0.2s;
-    /* 增加一点渐变动效 */
-}
-
-/* Handle 样式 */
+// Handle 样式
 .io-handle {
     width: 6px;
     height: 6px;
     background-color: var(--border-color);
     opacity: 0;
     transition: opacity 0.1s;
-    /* z-index: -100; */
+
+    // z-index: -100;
+    // 使用伪元素扩大判定范围
+    &::after {
+        content: '';
+        position: absolute;
+
+        top: -8px;
+        bottom: -8px;
+        left: -8px;
+        right: -8px;
+
+        // 调试用：如果想看到热区，可以取消下面这行的注释
+        // background: rgba(255, 255, 255, 0.1);
+
+        z-index: -100;
+        border-radius: 50%; // 热区也设为圆形，手感更好
+    }
+
+    &:hover {
+        opacity: 1;
+    }
+
 }
 
-/* [核心代码] 使用伪元素扩大判定范围 */
-.io-handle::after {
-    content: '';
-    position: absolute;
-
-    top: -8px;
-    bottom: -8px;
-    left: -8px;
-    right: -8px;
-
-    /* 调试用：如果想看到热区，可以取消下面这行的注释 */
-    /* background: rgba(255, 255, 255, 0.1); */
-
-    z-index: -100;
-    border-radius: 50%;
-    /* 热区也设为圆形，手感更好 */
-}
-
-.universal-node:hover .io-handle,
-.universal-node.selected .io-handle {
-    /* opacity: 1; */
-}
-
-/* 额外优化：当鼠标悬停在 Handle 的"热区"上时，让 Handle 稍微变大一点点作为反馈 */
-.io-handle:hover {
-    /* 视觉反馈 */
-    opacity: 1;
-    /* 激活色 */
-}
-
-
-.universal-node::after {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    pointer-events: none;
-    /* 鼠标穿透 */
-    border: 0 solid transparent;
-    /* 默认无边框 */
-    transition: border-color 0.1s, box-shadow 0.1s;
-    z-index: 100;
-    border-radius: inherit;
-    /* 跟随圆角 */
-}
-
-/* 拖拽反馈样式 */
-.drag-over-child::after {
-    box-shadow: inset -5px 0px var(--border-color);
-    /* background-color: color-mix(in srgb, var(--node-bg), transparent 20%); */
-}
-
-.drag-over-above::after {
-    /* border-top: 6px solid var(--border-color) !important; */
-    /* x y 羽化 扩展 */
-    box-shadow: inset 0px 6px 0px var(--border-color);
-}
-
-.drag-over-below::after {
-    /* border-bottom: 6px solid var(--border-color) !important; */
-    box-shadow: inset 0px -6px 0px var(--border-color);
-}
-
-.drag-over-above,
-.drag-over-below {
-    /* background-color: color-mix(in srgb, var(--node-bg), transparent 20%); */
-    /* box-shadow: 0 0 0 2px var(--border-color) !important; */
-}
-
-
-/* 强制隐藏线条 */
-
+// 强制隐藏线条
 :deep(.invisible-resizer-line) {
     border-color: #fff;
     opacity: 0 !important;
     z-index: -105;
+
+    &.selected {
+        border-color: #fff;
+        z-index: 105;
+    }
+
+    &.right {
+        border-right-width: 6px;
+    }
+
+    &.left {
+        border-left-width: 6px;
+    }
+
+    &.top {
+        border-top-width: 6px;
+    }
+
+    &.bottom {
+        border-bottom-width: 6px;
+    }
 }
 
-.selected:deep(.invisible-resizer-line) {
-    border-color: #fff;
-    z-index: 105;
-}
-
-:deep(.invisible-resizer-line.right) {
-    border-right-width: 6px;
-}
-
-:deep(.invisible-resizer-line.left) {
-    border-left-width: 6px;
-}
-
-:deep(.invisible-resizer-line.top) {
-    border-top-width: 6px;
-}
-
-:deep(.invisible-resizer-line.bottom) {
-    border-bottom-width: 6px;
-}
-
-
-/* 强制隐藏手柄，但保留鼠标交互 */
+// 强制隐藏手柄，但保留鼠标交互
 :deep(.invisible-resizer-handle) {
     width: 12px;
     height: 12px;
     border-radius: 50%;
     background: transparent !important;
     border: none !important;
-    /* background: var(--border-color) !important; */
-    /* 关键：虽然看不见，但鼠标放上去要变光标，且能点击 */
-    /* VueFlow 默认样式已经处理了 cursor，这里只要确保它不透明度为0即可 */
+    // background: var(--border-color) !important;
+    // 关键：虽然看不见，但鼠标放上去要变光标，且能点击
+    // VueFlow 默认样式已经处理了 cursor，这里只要确保它不透明度为0即可
     z-index: -104;
+
+    &.selected {
+        z-index: 106;
+    }
 }
 
-.selected:deep(.invisible-resizer-handle) {
-    z-index: 106;
-}
+
 
 .debug-info {
     position: absolute;
-    /* background: rgba(0, 0, 0, 0.85); */
+    // background: rgba(0, 0, 0, 0.85);
     color: #ffffff5d;
     top: 100%;
     margin-top: 0px;
@@ -607,22 +569,21 @@ async function toggleCodeMode() {
     font-size: 11px;
     line-height: 1;
     white-space: nowrap;
-    /* 禁止换行 */
+    // 禁止换行
     pointer-events: none;
-    /* 鼠标穿透，不挡操作 */
+    // 鼠标穿透，不挡操作
     z-index: 9999;
-    /* 确保浮在所有东西上面 */
-    /* 留一点间隙 */
-    /* 可选：加个小阴影 */
-    /* box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2); */
+    // 确保浮在所有东西上面
+    // 留一点间隙
+    // 可选：加个小阴影
+    // box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
 }
 
-/* 右键菜单 */
+// 右键菜单
 .context-menu-overlay {
     position: fixed;
     inset: 0;
-    z-index: 9999;
-    /* 确保在最顶层 */
+    z-index: 9999; // 确保在最顶层
     background: transparent;
 }
 
@@ -634,42 +595,33 @@ async function toggleCodeMode() {
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
     padding: 4px;
     min-width: 140px;
-    z-index: 10000;
-    /* 简单的入场动画 */
+    z-index: 10000; // 简单的入场动画
     animation: menu-fade-in 0.1s ease-out;
+
+    .menu-item {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 6px 10px;
+        cursor: pointer;
+        border-radius: 4px;
+        font-size: 13px;
+        color: var(--text-color);
+        transition: background-color 0.1s;
+
+        &:hover {
+            background-color: rgba(0, 0, 0, 0.05);
+        }
+    }
+
+    .icon {
+        font-family: 'JetBrains Mono';
+        opacity: 0.7;
+        width: 16px;
+        text-align: center;
+    }
 }
 
-.dark .node-context-menu {
-    background: #1e1e1e;
-    border-color: #333;
-}
-
-.node-context-menu .menu-item {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 6px 10px;
-    cursor: pointer;
-    border-radius: 4px;
-    font-size: 13px;
-    color: var(--text-color);
-    transition: background-color 0.1s;
-}
-
-.node-context-menu .menu-item:hover {
-    background-color: rgba(0, 0, 0, 0.05);
-}
-
-.dark .node-context-menu .menu-item:hover {
-    background-color: rgba(255, 255, 255, 0.1);
-}
-
-.node-context-menu .icon {
-    font-family: 'JetBrains Mono';
-    opacity: 0.7;
-    width: 16px;
-    text-align: center;
-}
 
 @keyframes menu-fade-in {
     from {

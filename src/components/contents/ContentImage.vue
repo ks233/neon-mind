@@ -28,10 +28,6 @@ function getLOD(width: number): number {
     return lod ?? 0;
 }
 
-
-const LEVEL_SMALL = 300;
-const LEVEL_MEDIUM = 1500;
-
 const isVisible = ref(false);
 const screenPixelWidth = ref(0)
 watch(
@@ -72,7 +68,7 @@ const currentSrc = computed(() => {
     return getResourceUrl(props.data.runtimePath ?? '', lodWidth);
 });
 
-const bgLayerSrc = computed(() => getResourceUrl(props.data.runtimePath ?? props.data.relativePath ?? '', LEVEL_SMALL))
+const bgLayerSrc = computed(() => getResourceUrl(props.data.runtimePath ?? props.data.relativePath ?? '', LOD_LEVELS[0]))
 
 // 1. [核心修改] 增加 LOD 状态标记
 const isLOD = ref(false)

@@ -530,7 +530,7 @@ function onInputBlur(e: FocusEvent) {
 
 </template>
 
-<style scoped>
+<style lang="scss" scoped>
 .md-wrapper {
     box-sizing: border-box;
     height: 100%;
@@ -538,44 +538,39 @@ function onInputBlur(e: FocusEvent) {
     padding: 8px 8px;
     display: flex;
     flex-direction: column;
+
+    &.is-code {
+        padding: 10px;
+        padding-bottom: 20px;
+    }
+
+    // 自动大小：禁止滚动，由内容撑开
+    &:not(.is-fixed) {
+        height: auto;
+        overflow: hidden;
+    }
+
+    // 固定大小：允许内部滚动
+    &.is-fixed {
+        overflow-y: auto;
+    }
+
+    &.is-editing {
+        cursor: text !important;
+        user-select: text;
+    }
 }
 
-.md-wrapper.is-code {
-    padding: 10px;
-    padding-bottom: 20px;
-}
-
-/* === 滚动条控制 === */
-/* 自动大小：禁止滚动，由内容撑开 */
-.md-wrapper:not(.is-fixed) {
-    height: auto;
-    overflow: hidden;
-}
-
-/* 固定大小：允许内部滚动 */
-.md-wrapper.is-fixed {
-    overflow-y: auto;
-}
-
-.md-wrapper.is-editing {
-    cursor: text !important;
-    user-select: text;
-}
-
-/* === CodeMirror 容器 === */
+// === CodeMirror 容器 ===
 .cm-container {
     height: 100%;
 }
-</style>
 
-<!-- Markdown -->
-<style scoped>
-/* === Markdown 预览样式 (仿 Obsidian) === */
+// === Markdown 预览样式 (仿 Obsidian) ===
 .markdown-body {
-    /* 允许点击穿透，方便未进入编辑时拖拽节点 */
+    // 允许点击穿透，方便未进入编辑时拖拽节点
     pointer-events: none;
     user-select: none;
-
     font-size: 14px;
     color: var(--text-color);
     font-family: var(--md-font-family);
@@ -583,305 +578,296 @@ function onInputBlur(e: FocusEvent) {
     line-height: var(--md-line-height);
     color: var(--md-color);
     word-wrap: break-word;
-}
 
-/* 标题 */
-.markdown-body :deep(h1) {
-    font-size: var(--md-h1-size);
-    font-weight: var(--md-h1-weight);
-    color: var(--md-h1-color);
-    margin: var(--md-h1-margin);
-    line-height: 1.2;
-    border-bottom: 1px solid color-mix(in srgb, var(--border-color), transparent 50%);
-}
+    :deep(h1) {
+        font-size: var(--md-h1-size);
+        font-weight: var(--md-h1-weight);
+        color: var(--md-h1-color);
+        margin: var(--md-h1-margin);
+        line-height: 1.2;
+        border-bottom: 1px solid color-mix(in srgb, var(--border-color), transparent 50%);
+    }
 
-.markdown-body :deep(h2) {
-    font-size: var(--md-h2-size);
-    font-weight: var(--md-h2-weight);
-    color: var(--md-h2-color);
-    margin: var(--md-h2-margin);
-    line-height: 1.3;
-    border-bottom: 1px solid color-mix(in srgb, var(--border-color), transparent 50%);
-}
+    :deep(h2) {
+        font-size: var(--md-h2-size);
+        font-weight: var(--md-h2-weight);
+        color: var(--md-h2-color);
+        margin: var(--md-h2-margin);
+        line-height: 1.3;
+        border-bottom: 1px solid color-mix(in srgb, var(--border-color), transparent 50%);
+    }
 
-.markdown-body :deep(h3) {
-    font-size: var(--md-h3-size);
-    font-weight: var(--md-h3-weight);
-    color: var(--md-h3-color);
-    margin: var(--md-h3-margin);
-}
+    :deep(h3) {
+        font-size: var(--md-h3-size);
+        font-weight: var(--md-h3-weight);
+        color: var(--md-h3-color);
+        margin: var(--md-h3-margin);
+    }
 
-/* 段落 */
-.markdown-body :deep(p) {
-    /* CM6 是按行渲染的，行与行之间没有 margin collapse，
+    :deep(p) {
+        /* CM6 是按行渲染的，行与行之间没有 margin collapse，
      所以这里的 margin 需要微调以匹配 CM6 的视觉感受 */
-    margin: 0.3em 0;
-    line-height: var(--md-line-height);
-}
+        margin: 0.3em 0;
+        line-height: var(--md-line-height);
+    }
 
-.markdown-body :deep(p:first-child) {
-    margin-top: 0;
-}
+    :deep(p:first-child) {
+        margin-top: 0;
+    }
 
-.markdown-body :deep(p:last-child) {
-    margin-bottom: 0;
-}
+    :deep(p:last-child) {
+        margin-bottom: 0;
+    }
 
-/* 强调 */
-.markdown-body :deep(strong) {
-    font-weight: var(--md-bold-weight);
-    color: var(--md-bold-color);
-}
+    :deep(strong) {
+        font-weight: var(--md-bold-weight);
+        color: var(--md-bold-color);
+    }
 
-.markdown-body :deep(em) {
-    font-style: var(--md-italic-style);
-    color: var(--md-bold-color);
-}
+    :deep(em) {
+        font-style: var(--md-italic-style);
+        color: var(--md-bold-color);
+    }
 
-/* 引用 */
-.markdown-body :deep(blockquote) {
-    border-left: var(--md-quote-border);
-    padding-left: 10px;
-    color: var(--md-quote-color);
-    margin: 0.5em 0;
-    padding: 0 1em;
-    background-color: #00000049;
-}
+    :deep(blockquote) {
+        border-left: var(--md-quote-border);
+        padding-left: 10px;
+        color: var(--md-quote-color);
+        margin: 0.5em 0;
+        padding: 0 1em;
+        background-color: #00000049;
+    }
 
-/* 代码 */
+    :deep(code) {
+        font-family: var(--md-code-font);
+        color: var(--md-code-color);
+        border-radius: var(--md-code-radius);
 
-.markdown-body :deep(code) {
-    font-family: var(--md-code-font);
-    color: var(--md-code-color);
-    border-radius: var(--md-code-radius);
-}
+        &:not(pre code) {
+            background-color: var(--md-code-bg);
+            padding: 0 4px;
+        }
+    }
 
-.markdown-body :deep(code):not(pre code) {
-    background-color: var(--md-code-bg);
-    padding: 0 4px;
-}
+    :deep(a) {
+        color: var(--md-link-color);
+        text-decoration: var(--md-link-decoration);
+    }
 
+    > {
 
+        :deep(ul),
+        :deep(ol) {
+            margin-top: 0.5em;
+            margin-bottom: 0.5em;
+        }
+    }
 
-/* 链接 */
-.markdown-body :deep(a) {
-    color: var(--md-link-color);
-    text-decoration: var(--md-link-decoration);
-}
+    :deep(ul),
+    :deep(ol) {
+        padding-left: 1.2em;
+    }
 
-/* 列表 */
-.markdown-body> :deep(ul),
-.markdown-body> :deep(ol) {
-    margin-top: 0.5em;
-    margin-bottom: 0.5em;
-}
+    :deep(img) {
+        display: block;
+        pointer-events: none;
 
-.markdown-body :deep(ul) {
-    padding-left: 1.2em;
-}
+        // [!code focus:3] 核心修改
+        // 限制最大宽高不超过父容器，防止撑破布局
+        max-width: 100%;
+        max-height: 300px;
 
-
-.markdown-body :deep(ol) {
-    padding-left: 1.2em;
-}
-
-.markdown-body :deep(img) {
-    display: block;
-    pointer-events: none;
-
-    /* [!code focus:3] 核心修改 */
-    /* 限制最大宽高不超过父容器，防止撑破布局 */
-    max-width: 100%;
-    max-height: 300px;
-
-    /* 配合 object-fit (在 template 的 style 中设置) 使用，
+        /* 配合 object-fit (在 template 的 style 中设置) 使用，
      这能保证图片既不超过容器，又能按需填充(cover)或完整显示(contain) */
+    }
+
+    :deep(table) {
+        border-spacing: 0;
+        border-collapse: collapse;
+        width: 100%;
+        margin: 10px 0;
+        overflow: auto;
+        // 防止表格过宽撑破节点
+        display: block;
+        // 允许横向滚动
+        overflow: hidden;
+    }
+
+    :deep(th),
+    :deep(td) {
+        padding: 2px 6px;
+        border: 1px solid var(--border-color);
+    }
+
+    :deep(th) {
+        font-weight: 600;
+        background-color: #00000020;
+    }
+
+    :deep(tr) {
+        background-color: #00000020;
+    }
+
+    :deep(a) {
+        // 1. 强制允许响应鼠标 (关键!)
+        // 防止父级可能存在的 pointer-events: none 继承下来
+        pointer-events: auto !important;
+
+        // 2. 提升层级上下文
+        // 防止被同级的 absolute 遮罩层盖住
+        position: relative;
+        z-index: 10;
+
+        // 3. 鼠标手势
+        cursor: pointer;
+    }
+
+    // --- 代码块样式 ---
+    :deep(pre) {
+        padding: 12px;
+        overflow: auto;
+        font-size: 85%;
+        line-height: 1.45;
+        background-color: var(--md-code-bg);
+        border-radius: 6px;
+        margin: 10px 0;
+        font-family: var(--md-code-font) !important;
+        // 强制换行
+        white-space: pre-wrap;
+        // 保留空格和换行符，但是允许自动换行
+        word-wrap: break-word;
+        // 在长单词处断行
+        overflow-wrap: break-word;
+        // 兼容性更好的断行写法
+    }
+
+    // Todo
+    // 1. 针对包含任务列表的 ul (插件通常会添加 contains-task-list 类，如果没有，ul 也会生效)
+
+    :deep(.contains-task-list),
+    :deep(ul:has(.task-list-item)) {
+        list-style: none !important;
+
+        // 核心：强制去掉小圆点
+        padding-left: 0 !important;
+
+        // 去掉默认缩进，由 li 自己控制
+    }
+
+    // 2. 任务项容器 (li)
+
+    :deep(.task-list-item) {
+        position: relative;
+
+        // 为绝对定位的 checkbox 提供锚点
+        padding-left: 1.6em;
+
+        // 核心：给左侧留出空间，防止文字和 checkbox 重叠
+        // margin-bottom: 0.4em;
+        // 增加项之间的间距
+        list-style-type: none !important;
+
+        // 双重保险：去掉小圆点
+    }
+
+    // 3. 复选框本体 (input)
+
+    :deep(.task-list-item-checkbox) {
+        // A. 抹除原生样式
+        -webkit-appearance: none;
+        appearance: none;
+        margin: 0;
+        outline: none;
+
+        // B. 定义位置和尺寸
+        position: absolute;
+        left: 0.2em;
+
+        // 放在 padding-left 留出的空位里
+        top: 0.3em;
+
+        // 根据文字大小微调垂直位置
+        width: 1.1em;
+        height: 1.1em;
+
+        // C. 绘制未选中状态 (方框)
+        border: 1.5px solid var(--border-color);
+        border-radius: 2px;
+        background-color: #0000;
+        cursor: pointer;
+        transition: all 0.2s ease;
+
+        // 确保可点击
+        pointer-events: auto !important;
+        z-index: 10;
+    }
+
+    // 悬停效果
+
+    :deep(.task-list-item-checkbox:hover) {
+        border-color: var(--border-color);
+        background-color: #00000000;
+    }
+
+    // 4. 选中状态 (input:checked)
+
+    :deep(.task-list-item-checkbox:checked) {
+        background-color: #00000000;
+
+        // 蓝色背景
+        border-color: var(--border-color);
+
+        // D. 使用 SVG 绘制对勾 (最清晰的方案)
+        // 这是一个白色的对勾图标
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='white'%3E%3Cpath d='M13.78 4.22a.75.75 0 0 1 0 1.06l-7.25 7.25a.75.75 0 0 1-1.06 0L2.22 9.28a.75.75 0 0 1 1.06-1.06L6 10.94l6.72-6.72a.75.75 0 0 1 1.06 0z'/%3E%3C/svg%3E");
+        background-position: center;
+        background-repeat: no-repeat;
+        background-size: 80%;
+    }
 }
 
-/* === Markdown 表格与代码块样式 === */
-
-/* 注意：v-html 生成的内容需要使用 :deep() 选择器 */
-
-/* --- 表格样式 (类似 GitHub 风格) --- */
-:deep(table) {
-    border-spacing: 0;
-    border-collapse: collapse;
-    width: 100%;
-    margin: 10px 0;
-    overflow: auto;
-    /* 防止表格过宽撑破节点 */
-    display: block;
-    /* 允许横向滚动 */
-    overflow: hidden;
-}
-
-:deep(th),
-:deep(td) {
-    padding: 2px 6px;
-    border: 1px solid var(--border-color);
-}
-
-:deep(th) {
-    font-weight: 600;
-    background-color: #00000020;
-}
-
-:deep(tr) {
-    background-color: #00000020;
-}
-
-/* --- 代码块样式 --- */
-:deep(pre) {
-    padding: 12px;
-    overflow: auto;
-    font-size: 85%;
-    line-height: 1.45;
-    background-color: var(--md-code-bg);
-    border-radius: 6px;
-    margin: 10px 0;
-    font-family: var(--md-code-font) !important;
-    /* overflow: hidden; */
-    /* 核心修改：强制换行 */
-    white-space: pre-wrap;
-    /* 保留空格和换行符，但是允许自动换行 */
-    word-wrap: break-word;
-    /* 在长单词处断行 */
-    overflow-wrap: break-word;
-    /* 兼容性更好的断行写法 */
-}
-</style>
-
-<!-- Markdown Todo -->
-<style scoped>
-/* 1. 针对包含任务列表的 ul (插件通常会添加 contains-task-list 类，如果没有，ul 也会生效) */
-:deep(.contains-task-list),
-:deep(ul:has(.task-list-item)) {
-    list-style: none !important;
-    /* 核心：强制去掉小圆点 */
-    padding-left: 0 !important;
-    /* 去掉默认缩进，由 li 自己控制 */
-}
-
-/* 2. 任务项容器 (li) */
-:deep(.task-list-item) {
-    position: relative;
-    /* 为绝对定位的 checkbox 提供锚点 */
-    padding-left: 1.6em;
-    /* 核心：给左侧留出空间，防止文字和 checkbox 重叠 */
-    /* margin-bottom: 0.4em; */
-    /* 增加项之间的间距 */
-    list-style-type: none !important;
-    /* 双重保险：去掉小圆点 */
-}
-
-/* 3. 复选框本体 (input) */
-:deep(.task-list-item-checkbox) {
-    /* A. 抹除原生样式 */
-    -webkit-appearance: none;
-    appearance: none;
-    margin: 0;
-    outline: none;
-
-    /* B. 定义位置和尺寸 */
-    position: absolute;
-    left: 0.2em;
-    /* 放在 padding-left 留出的空位里 */
-    top: 0.3em;
-    /* 根据文字大小微调垂直位置 */
-    width: 1.1em;
-    height: 1.1em;
-
-    /* C. 绘制未选中状态 (方框) */
-    border: 1.5px solid var(--border-color);
-    border-radius: 2px;
-    background-color: #0000;
-    cursor: pointer;
-    transition: all 0.2s ease;
-
-    /* 确保可点击 */
-    pointer-events: auto !important;
-    z-index: 10;
-}
-
-/* 悬停效果 */
-:deep(.task-list-item-checkbox:hover) {
-    border-color: var(--border-color);
-    background-color: #00000000;
-}
-
-/* 4. 选中状态 (input:checked) */
-:deep(.task-list-item-checkbox:checked) {
-    background-color: #00000000;
-    /* 蓝色背景 */
-    border-color: var(--border-color);
-
-    /* D. 使用 SVG 绘制对勾 (最清晰的方案) */
-    /* 这是一个白色的对勾图标 */
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='white'%3E%3Cpath d='M13.78 4.22a.75.75 0 0 1 0 1.06l-7.25 7.25a.75.75 0 0 1-1.06 0L2.22 9.28a.75.75 0 0 1 1.06-1.06L6 10.94l6.72-6.72a.75.75 0 0 1 1.06 0z'/%3E%3C/svg%3E");
-    background-position: center;
-    background-repeat: no-repeat;
-    background-size: 80%;
-}
-</style>
-
-<!-- 使链接能被点击 -->
-<style scoped>
-:deep(a) {
-    /* 1. 强制允许响应鼠标 (关键!) */
-    /* 防止父级可能存在的 pointer-events: none 继承下来 */
-    pointer-events: auto !important;
-
-    /* 2. 提升层级上下文 */
-    /* 防止被同级的 absolute 遮罩层盖住 */
-    position: relative;
-    z-index: 10;
-
-    /* 3. 鼠标手势 */
-    cursor: pointer;
-}
-
-/* 确保预览层本身也是可交互的 */
+// 确保预览层本身也是可交互的
 .preview-layer {
     pointer-events: auto;
 }
 </style>
 
-<!-- CM 滚动条 -->
-<style scoped>
-/* === 自定义滚动条样式 === */
 
-/* 1. 定义滚动条的整体尺寸 */
+<!-- CM 滚动条 -->
+<style lang="scss" scoped>
+// === 自定义滚动条样式 ===
+
+// 1. 定义滚动条的整体尺寸
 .md-wrapper::-webkit-scrollbar,
 :deep(.cm-scroller)::-webkit-scrollbar {
     width: 6px;
-    /* 纵向滚动条宽度 */
+    // 纵向滚动条宽度
     height: 6px;
-    /* 横向滚动条高度 */
+    // 横向滚动条高度
 }
 
-/* 2. 定义滚动条轨道 (Track) - 通常设为透明 */
+// 2. 定义滚动条轨道 (Track) - 通常设为透明
 .md-wrapper::-webkit-scrollbar-track,
 :deep(.cm-scroller)::-webkit-scrollbar-track {
     background: transparent;
 }
 
-/* 3. 定义滑块 (Thumb) - 核心样式 */
+// 3. 定义滑块 (Thumb) - 核心样式
 .md-wrapper::-webkit-scrollbar-thumb,
 :deep(.cm-scroller)::-webkit-scrollbar-thumb {
-    /* 使用半透明灰色，这样在深色/浅色模式下都能看清 */
+    // 使用半透明灰色，这样在深色/浅色模式下都能看清
     background-color: rgba(150, 150, 150, 0.3);
-    border-radius: 4px;
-    /* 圆角 */
+    border-radius: 4px; // 圆角
 }
 
-/* 4. 鼠标悬停在滑块上时加深颜色 */
+// 4. 鼠标悬停在滑块上时加深颜色
 .md-wrapper::-webkit-scrollbar-thumb:hover,
 :deep(.cm-scroller)::-webkit-scrollbar-thumb:hover {
     background-color: rgba(150, 150, 150, 0.6);
 }
 
-/* 5. (可选) 只有在鼠标悬停在容器上时才显示滚动条 */
-/* 这会让界面更像 Notion，平时极其干净 */
+// 5. (可选) 只有在鼠标悬停在容器上时才显示滚动条
+// 这会让界面更像 Notion，平时极其干净
 /* .md-wrapper:not(:hover)::-webkit-scrollbar-thumb,
 .md-wrapper:not(:hover) :deep(.cm-scroller)::-webkit-scrollbar-thumb {
   background-color: transparent;
@@ -889,7 +875,7 @@ function onInputBlur(e: FocusEvent) {
 </style>
 
 <!-- 代码模式 -->
-<style scoped>
+<style lang="scss" scoped>
 .hljs-container {
     margin: 0;
     padding: 0;
@@ -899,12 +885,12 @@ function onInputBlur(e: FocusEvent) {
     display: flex;
     flex-direction: column;
     word-wrap: break-word;
-    /* 允许滚动 */
+    // 允许滚动
     font-family: var(--md-code-font);
     font-size: var(--md-font-size);
     line-height: var(--md-line-height);
     background-color: transparent;
-    /* 使用节点背景 */
+    // 使用节点背景
 }
 
 code {
@@ -914,11 +900,11 @@ code {
 .hljs {
     background: transparent !important;
     padding: 0 !important;
-    /* white-space: pre; */
+    // white-space: pre;
     text-wrap: wrap;
 }
 
-/* 语言角标 */
+// 语言角标
 .lang-badge {
     position: absolute;
     bottom: 2px;
@@ -930,29 +916,26 @@ code {
     text-transform: uppercase;
 }
 
-/* 输入框样式 */
+// 输入框样式
 .lang-input {
-
     position: absolute;
     bottom: 2px;
     right: 4px;
     font-size: 10px;
     color: var(--text-color);
-
     text-align: right;
-    /* 视觉样式 */
+    // 视觉样式
     color: var(--text-color);
-    background-color: #00000044;
+    background-color: #00000011;
     border: none;
 
-    /* 尺寸与交互 */
+    // 尺寸与交互
     width: 80px;
     opacity: 1;
     outline: none;
     transition: all 0.2s;
 
-    z-index: 10;
-    /* 确保在编辑器上方 */
+    z-index: 10; // 确保在编辑器上方
 }
 
 ::selection {
