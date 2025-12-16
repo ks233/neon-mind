@@ -71,10 +71,10 @@ useResizeObserver(containerRef, (entries) => {
     const entry = entries[0]
     const { width, height } = entry.contentRect
 
-    // 只有在"自动模式"下，才把 DOM 的尺寸反向同步给 Store (用于 ELK 排版)
+    // 只有在"自动模式"下，才把 DOM 的尺寸反向同步给 Store
     // 加上简单的防抖判断避免微小抖动
     if (!isFixedSize.value && width > 0 && height > 0) {
-        canvasStore.reportAutoContentSize(id, { width, height })
+        canvasStore.reportAutoContentSize(id, { width: node.dimensions.width, height: node.dimensions.height })
     }
 })
 

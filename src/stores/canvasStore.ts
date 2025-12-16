@@ -56,7 +56,7 @@ export const useCanvasStore = defineStore('canvas', () => {
     const historyStack = ref<HistoryEntry[]>([]);
     const futureStack = shallowRef<HistoryEntry[]>([]);
 
-    async function execute(mutator: (draft: CanvasModel) => void, recordHistory = true) {
+    async function execute(mutator: (draft: CanvasModel) => void, recordHistory = true, debounceSync = false) {
         if (recordHistory) {
             // console.trace("execute")
         }
@@ -81,7 +81,11 @@ export const useCanvasStore = defineStore('canvas', () => {
             model.value = nextState;
         }
         // 触发视图同步 (位置、结构变化时)
-        await syncModelToView();
+        if(debounceSync){
+            debouncedLayout();
+        }else{
+            await syncModelToView();
+        }
     }
 
     // === 撤销 ===
@@ -633,7 +637,7 @@ export const useCanvasStore = defineStore('canvas', () => {
                         node.width = size.width;
                         node.height = size.height;
                     }
-                }, false);
+                }, false, true);
             }
         }
     }
@@ -641,7 +645,7 @@ export const useCanvasStore = defineStore('canvas', () => {
     // 防抖的布局函数，避免打字时每帧都重排
     const debouncedLayout = useDebounceFn(() => {
         syncModelToView();
-    }, 300);
+    }, 5);
 
     function updateEdgeLabel(id: string, label: string) {
         execute(draft => {
