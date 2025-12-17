@@ -1,2 +1,2 @@
-# mind-canvas
+# neon-mind
 

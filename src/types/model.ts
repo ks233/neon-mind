@@ -80,7 +80,7 @@ export interface CanvasModel {
 export interface CanvasFile {
     version: number; // [关键] 版本号
     meta: {
-        appName: "MindCanvas",
+        appName: "NeonMind",
         createdAt: number,
         updatedAt: number,
     };

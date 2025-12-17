@@ -2547,31 +2547,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "mind-canvas"
-version = "0.1.0"
-dependencies = [
- "base64 0.21.7",
- "fast_image_resize",
- "hex",
- "image",
- "mime_guess",
- "num_cpus",
- "percent-encoding",
- "serde",
- "serde_json",
- "sha2",
- "tauri",
- "tauri-build",
- "tauri-plugin-clipboard-manager",
- "tauri-plugin-dialog",
- "tauri-plugin-fs",
- "tauri-plugin-http",
- "tauri-plugin-opener",
- "threadpool",
- "urlencoding",
-]
-
-[[package]]
 name = "miniz_oxide"
 version = "0.8.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2651,6 +2626,31 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ee6cda3051665f1fb8d9e08fc35c96d5a244fb1be711a03b71118828afc9a873"
 dependencies = [
  "jni-sys",
+]
+
+[[package]]
+name = "neon-mind"
+version = "0.1.0"
+dependencies = [
+ "base64 0.21.7",
+ "fast_image_resize",
+ "hex",
+ "image",
+ "mime_guess",
+ "num_cpus",
+ "percent-encoding",
+ "serde",
+ "serde_json",
+ "sha2",
+ "tauri",
+ "tauri-build",
+ "tauri-plugin-clipboard-manager",
+ "tauri-plugin-dialog",
+ "tauri-plugin-fs",
+ "tauri-plugin-http",
+ "tauri-plugin-opener",
+ "threadpool",
+ "urlencoding",
 ]
 
 [[package]]

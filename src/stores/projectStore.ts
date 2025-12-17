@@ -20,7 +20,7 @@ export const useProjectStore = defineStore('project', () => {
 
     // === Computed: 窗口标题 ===
     const windowTitle = computed(() => {
-        let title = 'Mind Canvas';
+        let title = 'NeonMind';
         if (projectFilePath.value) {
             title += ` - ${projectFilePath.value}`;
         } else {

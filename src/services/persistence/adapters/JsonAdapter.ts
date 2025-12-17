@@ -20,7 +20,7 @@ export class JsonAdapter {
     static stringify(model: CanvasModel): string {
         const fileContent = {
             version: 1,
-            meta: { app: 'MindCanvas', updatedAt: Date.now() },
+            meta: { app: 'NeonMind', updatedAt: Date.now() },
             model: model
         };
         return JSON.stringify(fileContent, replacer, 2);
