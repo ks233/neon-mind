@@ -21,6 +21,8 @@ interface NodeData {
 }
 const props = defineProps<NodeProps<NodeData>>()
 
+const isDev = import.meta.env.DEV
+
 // 初始化 composables
 const { id, node } = useNode()
 const canvasStore = useCanvasStore()
@@ -337,7 +339,7 @@ async function toggleCodeMode() {
                 @update:language="(v: any) => handleUpdate('language', v)" />
         </div>
 
-        <div v-show="showDebug" class="debug-info">
+        <div v-show="showDebug && isDev" class="debug-info">
             <span>x:{{ Math.round(position.x) }}, y:{{ Math.round(position.y || 0) }}, </span>
             <span> w:{{ Math.round(dimensions.width) }}, h:{{ Math.round(dimensions.height || 0) }}, </span>
             <span>id: {{ id.substring(0, 8) }}</span><br>
